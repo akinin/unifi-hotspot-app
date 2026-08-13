@@ -59,6 +59,25 @@ TEXT = {
         "export_csv": "Export CSV",
         "portal_saved": "Portal settings updated",
         "sms_sent": "Test SMS sent",
+        "subtitle": "Wiren Board SMS and guest access",
+        "portal_help": "Configure the welcome screen shown to Wi-Fi guests.",
+        "sms_help": "Send a diagnostic message through the configured Wiren Board.",
+        "active_help": "Manage authorized guests and their access time.",
+        "archive_help": "Review previous guest authorizations and export the history.",
+        "change_logo": "Click the logo to replace it",
+        "no_active_hint": "Newly authorized Wi-Fi guests will appear here.",
+        "search_clients": "Search clients",
+        "search_archive": "Search archive",
+        "found": "Found",
+        "refresh": "Refresh",
+        "copy": "Copy",
+        "write_sms": "SMS",
+        "copied": "Copied",
+        "confirm_title": "Confirm action",
+        "confirm_text": "This action changes guest access. Continue?",
+        "cancel": "Cancel",
+        "confirm": "Continue",
+        "characters": "characters",
     },
     "ru": {
         "active": "Активные",
@@ -94,6 +113,25 @@ TEXT = {
         "export_csv": "Выгрузить CSV",
         "portal_saved": "Настройки портала сохранены",
         "sms_sent": "Тестовая SMS отправлена",
+        "subtitle": "SMS через Wiren Board и гостевой доступ",
+        "portal_help": "Настройте экран приветствия, который увидят гости Wi-Fi.",
+        "sms_help": "Отправьте диагностическое сообщение через настроенный Wiren Board.",
+        "active_help": "Управляйте авторизованными гостями и сроком их доступа.",
+        "archive_help": "Просматривайте историю авторизаций и выгружайте её в CSV.",
+        "change_logo": "Нажмите на логотип, чтобы заменить его",
+        "no_active_hint": "Здесь появятся авторизованные гости Wi-Fi.",
+        "search_clients": "Поиск клиентов",
+        "search_archive": "Поиск по архиву",
+        "found": "Найдено",
+        "refresh": "Обновить",
+        "copy": "Копировать",
+        "write_sms": "SMS",
+        "copied": "Скопировано",
+        "confirm_title": "Подтвердите действие",
+        "confirm_text": "Это действие изменит гостевой доступ. Продолжить?",
+        "cancel": "Отмена",
+        "confirm": "Продолжить",
+        "characters": "символов",
     },
 }
 
@@ -120,8 +158,7 @@ async def admin_home(
         _layout(
             "Active clients",
             _messages(message, error)
-            + _settings_form(settings, lang, "active")
-            + _test_sms_form(lang)
+            + _dashboard_cards(settings, lang, "active")
             + _active_table(settings, sessions, unifi_clients, lang),
             active_tab="active",
             lang=lang,
@@ -143,8 +180,7 @@ def admin_archive(
         _layout(
             "Archive",
             _messages(message, error)
-            + _settings_form(settings, lang, "archive")
-            + _test_sms_form(lang)
+            + _dashboard_cards(settings, lang, "archive")
             + _archive_table(rows, lang),
             active_tab="archive",
             lang=lang,
@@ -373,42 +409,56 @@ def _url(value: str) -> str:
 
 def _messages(message: str, error: str) -> str:
     if error:
-        return f"<p class='notice error'>{html.escape(error)}</p>"
+        return f"<div class='notice error' role='alert'><span class='notice-icon'>!</span><span>{html.escape(error)}</span></div>"
     if message:
-        return f"<p class='notice success'>{html.escape(message)}</p>"
+        return f"<div class='notice success' role='status'><span class='notice-icon'>✓</span><span>{html.escape(message)}</span></div>"
     return ""
 
 
 def _settings_form(settings: Settings, lang: str, active_tab: str) -> str:
     title = html.escape(settings.hotspot_portal_title)
     return f"""
-    <section>
-      <div class="section-head"><h2>{_t(lang, "portal")}</h2></div>
-      <form class="settings" method="post" action="settings" enctype="multipart/form-data">
+    <section class="ha-card portal-card">
+      <div class="card-heading">
+        <span class="card-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM7.76 14.26l1.42 1.42a4 4 0 0 1 5.64 0l1.42-1.42a6 6 0 0 0-8.48 0ZM4.93 11.43l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42a10 10 0 0 0-14.14 0ZM2.1 8.6 3.5 10a12 12 0 0 1 17 0l1.4-1.4a14 14 0 0 0-19.8 0Z"/></svg>
+        </span>
+        <div><h2>{_t(lang, "portal")}</h2><p>{_t(lang, "portal_help")}</p></div>
+      </div>
+      <form class="settings card-content" method="post" action="settings" enctype="multipart/form-data">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
-        <label>{_t(lang, "welcome_text")}<input name="title" value="{title}" maxlength="120"></label>
+        <label class="field"><span>{_t(lang, "welcome_text")}</span><input name="title" value="{title}" maxlength="120"></label>
         <label class="logo-picker" title="{_t(lang, 'choose_file')}">
-          <span>{_t(lang, "logo")}</span>
           <span class="logo-preview">
             <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
             <img id="logo-preview" src="logo" alt="{_t(lang, 'logo')}">
           </span>
+          <span class="logo-copy"><strong>{_t(lang, "logo")}</strong><small>{_t(lang, "change_logo")}</small></span>
         </label>
-        <button class="save-button" type="submit">{_t(lang, "save")}</button>
+        <div class="card-actions"><button class="primary-button" type="submit">{_t(lang, "save")}</button></div>
       </form>
     </section>
     """
 
 
+def _dashboard_cards(settings: Settings, lang: str, active_tab: str) -> str:
+    return f'<div class="dashboard-grid">{_settings_form(settings, lang, active_tab)}{_test_sms_form(lang)}</div>'
+
+
 def _test_sms_form(lang: str) -> str:
     return f"""
-    <section>
-      <h2>{_t(lang, "test_sms")}</h2>
-      <form class="test-sms" method="post" action="test-sms">
+    <section class="ha-card sms-card">
+      <div class="card-heading">
+        <span class="card-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm0 14H5.17L4 17.17V4h16v12Z"/></svg>
+        </span>
+        <div><h2>{_t(lang, "test_sms")}</h2><p>{_t(lang, "sms_help")}</p></div>
+      </div>
+      <form class="test-sms card-content" method="post" action="test-sms">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
-        <label>{_t(lang, "phone")}<input name="phone" type="tel" placeholder="+79991234567" required></label>
-        <label>{_t(lang, "message")}<input name="message" maxlength="1000" required></label>
-        <button class="save-button" type="submit">{_t(lang, "send")}</button>
+        <label class="field"><span>{_t(lang, "phone")}</span><input id="sms-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79991234567" required></label>
+        <label class="field"><span>{_t(lang, "message")} <small id="message-counter">0 / 1000 {_t(lang, "characters")}</small></span><textarea id="sms-message" name="message" maxlength="1000" rows="3" required></textarea></label>
+        <div class="card-actions"><button class="primary-button" type="submit">{_t(lang, "send")}</button></div>
       </form>
     </section>
     """
@@ -424,11 +474,15 @@ def _active_table(
     for session in sessions:
         mac = str(session["client_mac"]).lower()
         client = unifi_clients.get(mac, {})
+        phone = str(session["phone"])
+        display_name = str(session["display_name"] or client.get("name") or client.get("hostname") or "")
+        ip_address = str(client.get("ip") or "")
+        search_text = html.escape(f"{display_name} {mac} {phone} {ip_address}".lower(), quote=True)
         rows.append(
-            "<tr>"
+            f"<tr data-filter-row data-search='{search_text}'>"
             f"<td data-label='{_t(lang, 'client')}'>{_client_identity(session, client, mac, lang)}</td>"
-            f"<td data-label='{_t(lang, 'phone')}'>{html.escape(str(session['phone']))}</td>"
-            f"<td data-label='{_t(lang, 'ip')}'>{html.escape(str(client.get('ip') or ''))}</td>"
+            f"<td data-label='{_t(lang, 'phone')}'><div class='value-actions'><span>{html.escape(phone)}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button><button type='button' class='text-button sms-client-button' data-phone='{html.escape(phone, quote=True)}'>{_t(lang, 'write_sms')}</button></div></td>"
+            f"<td data-label='{_t(lang, 'ip')}'>{html.escape(ip_address)}</td>"
             f"<td data-label='{_t(lang, 'authorized')}'>{_dt(session['authorized_at'])}</td>"
             f"<td data-label='{_t(lang, 'valid_until')}'>{_dt(session['valid_until'])}</td>"
             f"<td data-label='{_t(lang, 'extend')}'>{_extend_actions(mac, lang)}</td>"
@@ -436,11 +490,15 @@ def _active_table(
             f"<td data-label='{_t(lang, 'block')}'>{_block_action(mac, lang)}</td>"
             "</tr>"
         )
-    body = "\n".join(rows) if rows else f"<tr><td colspan='8' class='empty'>{_t(lang, 'no_active')}</td></tr>"
+    body = "\n".join(rows) if rows else f"<tr class='empty-row'><td colspan='8' class='empty'><strong>{_t(lang, 'no_active')}</strong><small>{_t(lang, 'no_active_hint')}</small></td></tr>"
     return f"""
-    <section>
-      <div class="section-head"><h2>{_t(lang, "active_clients")}</h2>{_tabs(lang, "active")}</div>
-      <table class="active-table">
+    <section class="ha-card clients-card">
+      <div class="section-head card-heading table-heading">
+        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3Zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z"/></svg></span><div><h2>{_t(lang, "active_clients")}</h2><p>{_t(lang, "active_help")}</p></div></div>
+        {_tabs(lang, "active")}
+      </div>
+      {_table_toolbar(lang, "active")}
+      <div class="table-scroll"><table class="active-table filter-table" data-filter-table="active">
         <colgroup>
           <col class="col-client"><col class="col-phone"><col class="col-ip">
           <col class="col-date"><col class="col-date"><col class="col-extend">
@@ -453,7 +511,7 @@ def _active_table(
           </tr>
         </thead>
         <tbody>{body}</tbody>
-      </table>
+      </table></div>
     </section>
     """
 
@@ -462,7 +520,7 @@ def _client_identity(session, client: dict[str, Any], mac: str, lang: str) -> st
     name = str(session["display_name"] or client.get("name") or client.get("hostname") or "")
     return f"""
     <button type="button" class="client-display" title="{_t(lang, 'edit')}">{html.escape(name or mac)}</button>
-    <small>{html.escape(mac)}</small>
+    <span class="muted-line"><small>{html.escape(mac)}</small><button type="button" class="icon-button copy-button" data-copy="{html.escape(mac, quote=True)}" title="{_t(lang, 'copy')}" aria-label="{_t(lang, 'copy')}">⧉</button></span>
     <form class="client-name" method="post" action="clients/{html.escape(mac)}/name" hidden>
       <input type="hidden" name="lang" value="{html.escape(lang)}">
       <input name="display_name" value="{html.escape(name)}" maxlength="120" placeholder="{_t(lang, 'name')}">
@@ -485,7 +543,7 @@ def _extend_actions(mac: str, lang: str = "en") -> str:
 def _revoke_actions(mac: str, lang: str = "en") -> str:
     return f"""
     <div class="actions">
-      <form method="post" action="clients/{html.escape(mac)}/revoke"><input type="hidden" name="lang" value="{html.escape(lang)}"><button>{_t(lang, "revoke")}</button></form>
+      <form method="post" action="clients/{html.escape(mac)}/revoke" data-confirm><input type="hidden" name="lang" value="{html.escape(lang)}"><button class="secondary-button">{_t(lang, "revoke")}</button></form>
     </div>
     """
 
@@ -493,7 +551,7 @@ def _revoke_actions(mac: str, lang: str = "en") -> str:
 def _block_action(mac: str, lang: str = "en") -> str:
     return f"""
     <div class="actions">
-      <form method="post" action="clients/{html.escape(mac)}/block"><input type="hidden" name="lang" value="{html.escape(lang)}"><button class="danger">{_t(lang, "block")}</button></form>
+      <form method="post" action="clients/{html.escape(mac)}/block" data-confirm><input type="hidden" name="lang" value="{html.escape(lang)}"><button class="danger">{_t(lang, "block")}</button></form>
     </div>
     """
 
@@ -503,8 +561,12 @@ def _archive_table(rows, lang: str) -> str:
     table_rows = []
     for row in rows:
         status = _archive_status(row, now)
+        search_text = html.escape(
+            f"{row['display_name'] or ''} {row['client_mac']} {row['phone']} {status}".lower(),
+            quote=True,
+        )
         table_rows.append(
-            "<tr>"
+            f"<tr data-filter-row data-search='{search_text}'>"
             f"<td><strong>{html.escape(str(row['display_name'] or row['client_mac']))}</strong><small>{html.escape(str(row['client_mac']))}</small></td>"
             f"<td>{html.escape(str(row['phone']))}</td>"
             f"<td>{_dt(row['authorized_at'])}</td>"
@@ -513,17 +575,38 @@ def _archive_table(rows, lang: str) -> str:
             f"<td><span class='badge {status}'>{status}</span></td>"
             "</tr>"
         )
-    body = "\n".join(table_rows) if table_rows else f"<tr><td colspan='6' class='empty'>{_t(lang, 'empty_archive')}</td></tr>"
+    body = "\n".join(table_rows) if table_rows else f"<tr class='empty-row'><td colspan='6' class='empty'>{_t(lang, 'empty_archive')}</td></tr>"
     return f"""
-    <section>
-      <div class="section-head"><h2>{_t(lang, "archive")}</h2><div class="table-tools"><a class="export-button" href="archive.csv">{_t(lang, "export_csv")}</a>{_tabs(lang, "archive")}</div></div>
-      <table>
+    <section class="ha-card clients-card">
+      <div class="section-head card-heading table-heading">
+        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.54 5.23 19.15 3.55A1.45 1.45 0 0 0 18 3H6c-.46 0-.88.21-1.15.55L3.46 5.23C3.17 5.57 3 6 3 6.5V19a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.5c0-.5-.17-.93-.46-1.27ZM6.24 5h11.52l.83 1H5.41l.83-1ZM5 19V8h14v11H5Zm4-9h6v2H9v-2Z"/></svg></span><div><h2>{_t(lang, "archive")}</h2><p>{_t(lang, "archive_help")}</p></div></div>
+        <div class="table-tools"><a class="secondary-button export-button" href="archive.csv">{_t(lang, "export_csv")}</a>{_tabs(lang, "archive")}</div>
+      </div>
+      {_table_toolbar(lang, "archive")}
+      <div class="table-scroll"><table class="filter-table" data-filter-table="archive">
         <thead>
           <tr><th>{_t(lang, "client")}</th><th>{_t(lang, "phone")}</th><th>{_t(lang, "authorized")}</th><th>{_t(lang, "valid_until")}</th><th>{_t(lang, "duration")}</th><th>{_t(lang, "status")}</th></tr>
         </thead>
         <tbody>{body}</tbody>
-      </table>
+      </table></div>
     </section>
+    """
+
+
+def _table_toolbar(lang: str, table_name: str) -> str:
+    placeholder = _t(lang, "search_archive" if table_name == "archive" else "search_clients")
+    return f"""
+    <div class="table-toolbar">
+      <label class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-5.2-5.2a7 7 0 1 0-1 1L20 21l1-1ZM5 10.5a5.5 5.5 0 1 1 11 0 5.5 5.5 0 0 1-11 0Z"/></svg>
+        <input type="search" data-filter-input="{table_name}" placeholder="{placeholder}" autocomplete="off">
+      </label>
+      <span class="result-count" data-result-count="{table_name}">{_t(lang, "found")}: 0</span>
+      <button type="button" class="secondary-button refresh-button" data-refresh>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.1A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h8V3l-3.35 3.35Z"/></svg>
+        {_t(lang, "refresh")}
+      </button>
+    </div>
     """
 
 
@@ -604,126 +687,119 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           document.documentElement.dataset.theme = initialTheme;
         </script>
         <style>
+          :root {{ --primary: #03a9f4; --primary-dark: #0391d1; --bg: #f2f4f7; --surface: #fff; --surface-2: #f7f9fb; --text: #212121; --muted: #6b7280; --divider: #e1e5e9; --danger: #db4437; --success: #43a047; --shadow: 0 2px 8px rgba(0,0,0,.09); --radius: 12px; }}
           * {{ box-sizing: border-box; }}
-          body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: #f4f5f6; color: #18212b; }}
-          header {{ position: relative; display: flex; justify-content: flex-start; align-items: center; padding: 15px 112px 15px 28px; background: #fff; color: #18212b; border-bottom: 1px solid #e5e7ea; box-shadow: 0 1px 2px rgba(0,0,0,.03); }}
-          header h1 {{ margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }}
-          .header-controls {{ position: absolute; right: 28px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; }}
-          .language {{ display: flex; gap: 6px; }}
-          .language a, .tabs a {{ color: #64748b; text-decoration: none; font-weight: 800; }}
-          .language a {{ color: #88919b; font-size: 12px; }}
-          .language a.active {{ color: #006fff; }}
-          main {{ max-width: 1440px; margin: 0 auto; padding: 28px; }}
-          section {{ margin-bottom: 24px; }}
-          .section-head {{ display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 14px; }}
-          h2 {{ font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.01em; }}
-          section > h2 {{ margin-bottom: 14px; }}
-          .tabs {{ display: inline-flex; width: max-content; justify-content: flex-end; gap: 4px; padding: 3px; background: #e9ebed; border-radius: 8px; }}
-          .tabs a {{ padding: 7px 12px; border-radius: 6px; font-size: 13px; }}
-          .tabs a.active {{ color: #18212b; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.1); }}
-          table {{ width: 100%; border-collapse: separate; border-spacing: 0; overflow: hidden; background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }}
-          th, td {{ padding: 12px 14px; border-bottom: 1px solid #edf0f2; text-align: left; vertical-align: top; font-size: 13px; }}
-          th {{ background: #f8f9fa; color: #69727d; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }}
-          .active-table {{ table-layout: fixed; }}
-          .active-table .col-client {{ width: 17%; }}
-          .active-table .col-phone {{ width: 11%; }}
-          .active-table .col-ip {{ width: 8%; }}
-          .active-table .col-date {{ width: 12%; }}
-          .active-table .col-extend {{ width: 20%; }}
-          .active-table .col-action {{ width: 10%; }}
-          .active-table td:nth-child(4), .active-table td:nth-child(5) {{ white-space: nowrap; }}
-          small {{ display: block; color: #64748b; margin-top: 3px; }}
-          form.settings, form.test-sms {{ display: grid; gap: 14px; align-items: end; background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }}
-          form.settings {{ grid-template-columns: minmax(320px, 1fr) 90px 110px; align-items: end; }}
-          form.test-sms {{ grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto; }}
-          label {{ display: grid; gap: 6px; font-size: 13px; color: #475569; font-weight: 700; }}
-          input {{ border: 1px solid #cfd4da; border-radius: 6px; padding: 9px 10px; background: #fff; font: inherit; outline: none; }}
-          input:focus {{ border-color: #006fff; box-shadow: 0 0 0 2px rgba(0,111,255,.14); }}
-          input[type=file] {{ position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }}
-          .logo-picker {{ align-content: start; cursor: pointer; }}
-          .logo-preview {{ width: 64px; height: 64px; display: grid; place-items: center; overflow: hidden; border: 1px solid #dfe3e8; border-radius: 10px; background: #f6f7f8; transition: border-color .15s, box-shadow .15s; }}
-          .logo-preview:hover {{ border-color: #006fff; box-shadow: 0 0 0 2px rgba(0,111,255,.12); }}
-          .logo-preview img {{ display: block; width: 100%; height: 100%; object-fit: contain; padding: 5px; }}
-          button {{ border: 0; border-radius: 6px; padding: 8px 10px; background: #006fff; color: #fff; font-weight: 600; cursor: pointer; }}
-          button:hover {{ background: #0062e5; }}
-          .save-button {{ min-width: 96px; width: auto; justify-self: start; min-height: 38px; padding: 0 16px; }}
-          .settings .save-button {{ width: 100%; justify-self: stretch; }}
-          button.danger {{ background: #b91c1c; }}
-          .actions {{ display: grid; gap: 8px; min-width: 0; }}
-          .actions form {{ display: flex; flex-wrap: wrap; gap: 6px; }}
-          .actions button {{ white-space: nowrap; }}
-          .client-display {{ padding: 0; background: none; color: #18212b; font-weight: 600; text-align: left; border-bottom: 1px dashed transparent; }}
-          .client-display:hover {{ background: none; color: #006fff; border-bottom-color: #006fff; }}
-          .client-name {{ margin-top: 5px; min-width: 170px; }}
-          .client-name input {{ min-width: 0; width: 170px; padding: 6px 8px; }}
-          .notice {{ padding: 11px 13px; border-radius: 6px; font-weight: 700; }}
-          .success {{ background: #dcfce7; color: #166534; }}
-          .error {{ background: #fee2e2; color: #991b1b; }}
-          .empty {{ color: #64748b; text-align: center; padding: 24px; }}
-          .badge {{ display: inline-block; padding: 4px 8px; border-radius: 999px; background: #e2e8f0; font-weight: 700; }}
-          .badge.active {{ background: #dcfce7; color: #166534; }}
-          .badge.revoked {{ background: #fef3c7; color: #92400e; }}
-          .badge.blocked {{ background: #fee2e2; color: #991b1b; }}
-          .table-tools {{ display: flex; align-items: center; gap: 10px; }}
-          .export-button {{ display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border: 1px solid #cfd4da; border-radius: 7px; background: #fff; color: #39424e; font-size: 13px; font-weight: 600; text-decoration: none; }}
-          .export-button:hover {{ border-color: #006fff; color: #006fff; }}
-          .theme-toggle {{ width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid #dfe3e8; border-radius: 8px; background: #f7f8f9; color: #5f6873; }}
-          .theme-toggle:hover {{ background: #eef5ff; color: #006fff; }}
-          .theme-toggle svg {{ width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }}
+          html {{ color-scheme: light; }}
+          body {{ margin: 0; min-height: 100vh; font-family: Roboto, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }}
+          header {{ position: sticky; top: 0; z-index: 20; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 10px max(20px, calc((100vw - 1280px) / 2)); background: var(--surface); border-bottom: 1px solid var(--divider); box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+          .brand {{ display: flex; align-items: center; gap: 12px; min-width: 0; }}
+          .brand-mark {{ width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #53bd00; color: #fff; font-size: 18px; font-weight: 900; letter-spacing: -2px; }}
+          header h1 {{ margin: 0; font-size: 18px; font-weight: 500; line-height: 1.2; }}
+          .brand p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
+          .header-controls, .language, .table-tools, .value-actions, .muted-line {{ display: flex; align-items: center; gap: 8px; }}
+          .language {{ padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--divider); }}
+          .language a, .tabs a {{ color: var(--muted); text-decoration: none; font-weight: 600; }}
+          .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
+          .language a.active {{ color: #fff; background: var(--primary); }}
+          main {{ max-width: 1280px; margin: 0 auto; padding: 24px 20px 48px; }}
+          .dashboard-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, .72fr); gap: 20px; align-items: start; margin-bottom: 20px; }}
+          .ha-card {{ min-width: 0; margin: 0 0 20px; overflow: hidden; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }}
+          .dashboard-grid .ha-card {{ margin-bottom: 0; }}
+          .card-heading {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px 14px; }}
+          .card-heading h2 {{ margin: 0; font-size: 18px; font-weight: 500; }}
+          .card-heading p {{ margin: 4px 0 0; color: var(--muted); line-height: 1.4; }}
+          .card-icon {{ width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
+          .card-icon svg {{ width: 23px; height: 23px; fill: currentColor; }}
+          .card-content {{ padding: 4px 20px 20px; }}
+          form.settings, form.test-sms {{ display: grid; gap: 16px; }}
+          .field {{ display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 500; }}
+          .field > span {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
+          .field small {{ margin: 0; font-weight: 400; }}
+          input, textarea {{ width: 100%; min-height: 44px; border: 1px solid #aeb7c0; border-radius: 8px; padding: 10px 12px; background: var(--surface); color: var(--text); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }}
+          textarea {{ min-height: 88px; resize: vertical; line-height: 1.45; }}
+          input:focus, textarea:focus {{ border-color: var(--primary); box-shadow: 0 0 0 2px rgba(3,169,244,.18); }}
+          input[type=file] {{ position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; pointer-events: none; }}
+          .logo-picker {{ display: flex; align-items: center; gap: 12px; width: max-content; max-width: 100%; cursor: pointer; }}
+          .logo-preview {{ width: 62px; height: 62px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 2px solid var(--divider); border-radius: 12px; background: var(--surface-2); transition: border-color .15s, transform .15s; }}
+          .logo-picker:hover .logo-preview {{ border-color: var(--primary); transform: translateY(-1px); }}
+          .logo-preview img {{ width: 100%; height: 100%; display: block; object-fit: contain; padding: 5px; }}
+          .logo-copy {{ display: grid; gap: 2px; color: var(--text); }}
+          .logo-copy small {{ margin: 0; color: var(--muted); font-weight: 400; }}
+          .card-actions {{ display: flex; justify-content: flex-end; padding-top: 2px; }}
+          button, .secondary-button {{ min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 8px; padding: 0 14px; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s, transform .08s; }}
+          button:active, .secondary-button:active {{ transform: translateY(1px); }}
+          .primary-button {{ min-width: 112px; background: var(--primary); color: #fff; }}
+          .primary-button:hover {{ background: var(--primary-dark); }}
+          .secondary-button, .actions button {{ border: 1px solid var(--divider); background: var(--surface); color: var(--primary); }}
+          .secondary-button:hover, .actions button:hover {{ background: rgba(3,169,244,.09); border-color: rgba(3,169,244,.45); }}
+          button.danger {{ border: 1px solid rgba(219,68,55,.35); background: transparent; color: var(--danger); }}
+          button.danger:hover {{ background: rgba(219,68,55,.1); }}
+          .section-head {{ justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }}
+          .section-title {{ display: flex; align-items: center; gap: 14px; min-width: 0; }}
+          .table-heading {{ flex-wrap: wrap; }}
+          .tabs {{ display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--divider); }}
+          .tabs a {{ padding: 7px 12px; border-radius: 7px; font-size: 13px; }}
+          .tabs a.active {{ color: #fff; background: var(--primary); }}
+          .table-toolbar {{ display: flex; align-items: center; gap: 12px; padding: 14px 20px; }}
+          .search-field {{ position: relative; flex: 1 1 320px; max-width: 520px; }}
+          .search-field svg {{ position: absolute; left: 12px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); fill: var(--muted); pointer-events: none; }}
+          .search-field input {{ padding-left: 40px; background: var(--surface-2); }}
+          .result-count {{ margin-left: auto; color: var(--muted); white-space: nowrap; font-size: 12px; }}
+          .refresh-button svg {{ width: 18px; height: 18px; fill: currentColor; }}
+          .table-scroll {{ overflow-x: auto; border-top: 1px solid var(--divider); }}
+          table {{ width: 100%; border-collapse: collapse; background: var(--surface); }}
+          th, td {{ padding: 13px 14px; border-bottom: 1px solid var(--divider); text-align: left; vertical-align: middle; font-size: 13px; }}
+          th {{ background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; white-space: nowrap; }}
+          tbody tr:hover {{ background: rgba(3,169,244,.045); }}
+          tbody tr:last-child td {{ border-bottom: 0; }}
+          .active-table {{ min-width: 1080px; table-layout: fixed; }}
+          .active-table .col-client {{ width: 17%; }} .active-table .col-phone {{ width: 16%; }} .active-table .col-ip {{ width: 8%; }} .active-table .col-date {{ width: 12%; }} .active-table .col-extend {{ width: 17%; }} .active-table .col-action {{ width: 9%; }}
+          small {{ display: block; color: var(--muted); margin-top: 3px; }}
+          .muted-line {{ justify-content: flex-start; gap: 5px; }}
+          .muted-line small {{ margin: 0; }}
+          .value-actions {{ flex-wrap: wrap; }}
+          .icon-button {{ width: 28px; min-height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }}
+          .icon-button:hover {{ background: rgba(3,169,244,.1); color: var(--primary); }}
+          .text-button {{ min-height: 28px; padding: 0 8px; border: 0; background: transparent; color: var(--primary); }}
+          .text-button:hover {{ background: rgba(3,169,244,.1); }}
+          .actions, .actions form {{ display: flex; flex-wrap: wrap; gap: 6px; }}
+          .actions button {{ min-height: 32px; padding: 0 9px; white-space: nowrap; }}
+          .client-display {{ min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text); font-weight: 500; text-align: left; }}
+          .client-display:hover {{ color: var(--primary); background: transparent; }}
+          .client-name input {{ width: 170px; min-height: 34px; padding: 6px 8px; }}
+          .notice {{ display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 12px 14px; border-radius: 10px; font-weight: 500; box-shadow: var(--shadow); }}
+          .notice-icon {{ width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: currentColor; color: #fff; }}
+          .success {{ border: 1px solid rgba(67,160,71,.3); background: #edf7ee; color: #2e7d32; }}
+          .error {{ border: 1px solid rgba(219,68,55,.3); background: #fff0ef; color: #c62828; }}
+          .empty {{ padding: 40px 20px; color: var(--muted); text-align: center; }}
+          .empty strong {{ display: block; margin-bottom: 5px; color: var(--text); font-size: 15px; font-weight: 500; }}
+          .badge {{ display: inline-flex; padding: 5px 9px; border-radius: 999px; background: #e6e9ed; font-weight: 600; font-size: 11px; text-transform: capitalize; }}
+          .badge.active {{ background: #e6f4ea; color: #188038; }} .badge.revoked {{ background: #fef7e0; color: #b06000; }} .badge.blocked {{ background: #fce8e6; color: #c5221f; }}
+          .export-button {{ white-space: nowrap; }}
+          .theme-toggle {{ width: 38px; min-height: 38px; padding: 0; border: 1px solid var(--divider); border-radius: 50%; background: var(--surface); color: var(--muted); }}
+          .theme-toggle:hover {{ background: var(--surface-2); color: var(--primary); }}
+          .theme-toggle svg {{ width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }}
           .moon-icon {{ display: none; }}
-          [data-theme="dark"] {{ color-scheme: dark; }}
-          [data-theme="dark"] body {{ background: #11151a; color: #e8eaed; }}
-          [data-theme="dark"] header {{ background: #181d23; color: #f2f4f6; border-color: #2c333b; box-shadow: none; }}
-          [data-theme="dark"] h2, [data-theme="dark"] .client-display {{ color: #e8eaed; }}
-          [data-theme="dark"] form.settings, [data-theme="dark"] form.test-sms, [data-theme="dark"] table {{ background: #181d23; border-color: #303741; box-shadow: none; }}
-          [data-theme="dark"] th {{ background: #20262d; color: #9aa3ad; }}
-          [data-theme="dark"] th, [data-theme="dark"] td {{ border-bottom-color: #2b323a; }}
-          [data-theme="dark"] label, [data-theme="dark"] small {{ color: #a6afb9; }}
-          [data-theme="dark"] input {{ background: #11161c; border-color: #3a424c; color: #edf0f2; }}
-          [data-theme="dark"] .logo-preview {{ background: #11161c; border-color: #3a424c; }}
-          [data-theme="dark"] .tabs {{ background: #262c33; }}
-          [data-theme="dark"] .tabs a.active {{ background: #3a424c; color: #fff; box-shadow: none; }}
-          [data-theme="dark"] .theme-toggle {{ background: #242a31; border-color: #3a424c; color: #d6dbe0; }}
-          [data-theme="dark"] .export-button {{ background: #181d23; border-color: #3a424c; color: #d6dbe0; }}
-          [data-theme="dark"] .sun-icon {{ display: none; }}
-          [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 1200px) {{
-            .active-table {{ display: block; table-layout: auto; border: 0; background: transparent; box-shadow: none; overflow: visible; }}
-            .active-table colgroup, .active-table thead {{ display: none; }}
-            .active-table tbody {{ display: grid; gap: 12px; }}
-            .active-table tr {{ display: block; overflow: hidden; border: 1px solid #e1e4e8; border-radius: 10px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }}
-            .active-table td {{ display: grid; grid-template-columns: minmax(125px, 28%) 1fr; gap: 12px; align-items: start; width: 100%; padding: 11px 13px; white-space: normal !important; }}
-            .active-table td::before {{ content: attr(data-label); color: #7a838d; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }}
-            .active-table td:last-child {{ border-bottom: 0; }}
-            .active-table .actions {{ width: 100%; }}
-            .active-table .actions form {{ justify-content: flex-start; }}
-            [data-theme="dark"] .active-table tr {{ background: #181d23; border-color: #303741; box-shadow: none; }}
-          }}
-          @media (max-width: 900px) {{
-            header {{ justify-content: flex-start; padding-right: 96px; }}
-            .section-head {{ display: flex; flex-wrap: wrap; align-items: center; }}
-            .tabs {{ flex: 0 0 auto; justify-content: flex-start; margin: 0; }}
-            .table-tools {{ flex: 0 0 auto; align-items: center; margin: 0; }}
-            main {{ padding: 14px; overflow-x: hidden; }}
-            form.settings {{ grid-template-columns: minmax(0, 1fr) 76px; align-items: end; }}
-            form.settings > label:first-of-type {{ grid-column: 1; grid-row: 1; }}
-            form.settings .logo-picker {{ grid-column: 2; grid-row: 1; }}
-            form.settings .logo-preview {{ width: 64px; height: 64px; }}
-            form.settings .save-button {{ grid-column: 1; grid-row: 2; width: auto; justify-self: start; }}
-            form.test-sms {{ grid-template-columns: 1fr; }}
-            .active-table td {{ grid-template-columns: minmax(105px, 38%) 1fr; gap: 10px; }}
-          }}
-          @media (max-width: 520px) {{
-            .section-head {{ align-items: flex-start; }}
-            .section-head > h2 {{ flex: 1 0 100%; margin-bottom: 10px; }}
-            .table-tools {{ flex-wrap: wrap; }}
-            .export-button, .tabs a {{ min-height: 32px; padding-left: 10px; padding-right: 10px; }}
-          }}
+          .toast {{ position: fixed; right: 20px; bottom: 20px; z-index: 50; padding: 11px 16px; border-radius: 8px; background: #323232; color: #fff; box-shadow: 0 5px 20px rgba(0,0,0,.28); opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .2s, transform .2s; }}
+          .toast.visible {{ opacity: 1; transform: translateY(0); }}
+          dialog {{ width: min(420px, calc(100vw - 32px)); border: 0; border-radius: 14px; padding: 0; background: var(--surface); color: var(--text); box-shadow: 0 18px 60px rgba(0,0,0,.35); }}
+          dialog::backdrop {{ background: rgba(0,0,0,.45); }}
+          .dialog-content {{ padding: 22px; }} .dialog-content h2 {{ margin: 0 0 8px; font-size: 20px; font-weight: 500; }} .dialog-content p {{ margin: 0; color: var(--muted); line-height: 1.5; }} .dialog-actions {{ display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--divider); }}
+          [hidden] {{ display: none !important; }}
+          [data-theme="dark"] {{ color-scheme: dark; --bg: #11151a; --surface: #1c1f23; --surface-2: #24282d; --text: #e5e7eb; --muted: #a1a7af; --divider: #343a40; --shadow: 0 2px 8px rgba(0,0,0,.35); }}
+          [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
+          [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
+          [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
+          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 16px 12px 36px; }} header {{ padding: 10px 14px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
+          @media (max-width: 640px) {{ .card-heading {{ padding: 16px; }} .card-content {{ padding: 2px 16px 16px; }} .table-toolbar {{ flex-wrap: wrap; padding: 12px 16px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 12px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 12px; padding: 12px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: start; width: 100%; padding: 11px 12px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
         </style>
       </head>
       <body>
         <header>
-          <h1>SMS Gateway Admin</h1>
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true">wb</span>
+            <div><h1>SMS Gateway</h1><p>{_t(lang, "subtitle")}</p></div>
+          </div>
           <div class="header-controls">
             <div class="language"><a href="?lang=ru" {ru_active}>RU</a><a href="?lang=en" {en_active}>EN</a></div>
             <button id="theme-toggle" class="theme-toggle" type="button" title="{_t(lang, 'theme')}" aria-label="{_t(lang, 'theme')}">
@@ -733,6 +809,14 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           </div>
         </header>
         <main>{content}</main>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+        <dialog id="confirm-dialog">
+          <div class="dialog-content"><h2>{_t(lang, "confirm_title")}</h2><p>{_t(lang, "confirm_text")}</p></div>
+          <div class="dialog-actions">
+            <button id="confirm-cancel" class="secondary-button" type="button">{_t(lang, "cancel")}</button>
+            <button id="confirm-submit" class="danger" type="button">{_t(lang, "confirm")}</button>
+          </div>
+        </dialog>
         <script>
           const logoInput = document.getElementById("logo-file");
           const logoPreview = document.getElementById("logo-preview");
@@ -745,6 +829,81 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
             const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
             document.documentElement.dataset.theme = next;
             localStorage.setItem("sms-theme", next);
+          }});
+          const toast = document.getElementById("toast");
+          let toastTimer;
+          function showToast(message) {{
+            toast.textContent = message;
+            toast.classList.add("visible");
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.remove("visible"), 1800);
+          }}
+          document.querySelectorAll(".copy-button").forEach((button) => {{
+            button.addEventListener("click", async () => {{
+              try {{
+                await navigator.clipboard.writeText(button.dataset.copy);
+                showToast("{_t(lang, 'copied')}");
+              }} catch (_) {{
+                const helper = document.createElement("textarea");
+                helper.value = button.dataset.copy;
+                document.body.appendChild(helper);
+                helper.select();
+                document.execCommand("copy");
+                helper.remove();
+                showToast("{_t(lang, 'copied')}");
+              }}
+            }});
+          }});
+          const smsPhone = document.getElementById("sms-phone");
+          const smsMessage = document.getElementById("sms-message");
+          const messageCounter = document.getElementById("message-counter");
+          function updateMessageCounter() {{
+            if (smsMessage && messageCounter) messageCounter.textContent = `${{smsMessage.value.length}} / 1000 {_t(lang, 'characters')}`;
+          }}
+          if (smsMessage) smsMessage.addEventListener("input", updateMessageCounter);
+          updateMessageCounter();
+          document.querySelectorAll(".sms-client-button").forEach((button) => {{
+            button.addEventListener("click", () => {{
+              if (!smsPhone) return;
+              smsPhone.value = button.dataset.phone;
+              document.querySelector(".sms-card").scrollIntoView({{ behavior: "smooth", block: "center" }});
+              setTimeout(() => (smsMessage || smsPhone).focus(), 350);
+            }});
+          }});
+          document.querySelectorAll("[data-filter-input]").forEach((input) => {{
+            const tableName = input.dataset.filterInput;
+            const table = document.querySelector(`[data-filter-table="${{tableName}}"]`);
+            const counter = document.querySelector(`[data-result-count="${{tableName}}"]`);
+            const rows = Array.from(table.querySelectorAll("[data-filter-row]"));
+            const applyFilter = () => {{
+              const query = input.value.trim().toLocaleLowerCase();
+              let visible = 0;
+              rows.forEach((row) => {{
+                const matches = !query || row.dataset.search.includes(query);
+                row.hidden = !matches;
+                if (matches) visible += 1;
+              }});
+              counter.textContent = `{_t(lang, 'found')}: ${{visible}}`;
+            }};
+            input.addEventListener("input", applyFilter);
+            applyFilter();
+          }});
+          document.querySelectorAll("[data-refresh]").forEach((button) => button.addEventListener("click", () => location.reload()));
+          const confirmDialog = document.getElementById("confirm-dialog");
+          let pendingForm = null;
+          document.querySelectorAll("form[data-confirm]").forEach((form) => {{
+            form.addEventListener("submit", (event) => {{
+              event.preventDefault();
+              pendingForm = form;
+              confirmDialog.showModal();
+            }});
+          }});
+          document.getElementById("confirm-cancel").addEventListener("click", () => {{ pendingForm = null; confirmDialog.close(); }});
+          document.getElementById("confirm-submit").addEventListener("click", () => {{
+            const form = pendingForm;
+            pendingForm = null;
+            confirmDialog.close();
+            if (form) form.submit();
           }});
           document.querySelectorAll(".client-display").forEach((display) => {{
             display.addEventListener("click", () => {{

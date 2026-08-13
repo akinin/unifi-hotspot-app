@@ -5,7 +5,15 @@ from fastapi import HTTPException
 
 from api.config import Settings
 from api.deps import require_api_token
-from hotspot.admin import _archive_table, _redirect, _settings_form, _tabs
+from hotspot.admin import (
+    _active_table,
+    _archive_table,
+    _layout,
+    _redirect,
+    _settings_form,
+    _tabs,
+    _test_sms_form,
+)
 from hotspot.unifi import UniFiClient
 
 
@@ -44,3 +52,17 @@ def test_admin_markup_uses_ingress_safe_relative_links() -> None:
     assert 'href="./?lang=en"' in _tabs("en", "active")
     assert 'href="archive.csv"' in _archive_table([], "en")
     assert _redirect(message="done", root="../../").headers["location"].startswith("../../?")
+
+
+def test_admin_dashboard_has_productivity_controls() -> None:
+    settings = Settings(app_role="admin")
+    active = _active_table(settings, [], {}, "en")
+    archive = _archive_table([], "en")
+    page = _layout("Active clients", _settings_form(settings, "en", "active") + _test_sms_form("en") + active, "active", "en")
+
+    assert 'data-filter-input="active"' in active
+    assert 'data-filter-input="archive"' in archive
+    assert 'id="sms-message"' in page
+    assert 'id="confirm-dialog"' in page
+    assert 'class="toast"' in page
+    assert "sms-client-button" in page
