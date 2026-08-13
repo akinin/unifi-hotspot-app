@@ -18,3 +18,13 @@ def test_home_assistant_ingress_entry_is_relative() -> None:
     assert config["ingress"] is True
     assert config["ingress_entry"] == "admin/"
     assert not config["ingress_entry"].startswith("/")
+
+
+def test_wirenboard_sms_rule_is_documented_and_included() -> None:
+    rule = Path("wirenboard/send_sms.js")
+    docs = Path("home-assistant-app/DOCS.md").read_text(encoding="utf-8")
+
+    assert rule.is_file()
+    assert 'defineVirtualDevice("sms_sender"' in rule.read_text(encoding="utf-8")
+    assert "обязательно" in docs.casefold()
+    assert "send_sms.js" in docs
