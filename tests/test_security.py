@@ -12,6 +12,8 @@ from hotspot.admin import (
     _active_table,
     _archive_table,
     _layout,
+    _portal_preview,
+    _portal_preview_content,
     _redirect,
     _settings_form,
     _sms_log_table,
@@ -92,9 +94,23 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'href="./?lang=en"' in page
     assert 'href="wb?lang=en"' in page
     assert 'href="usb?lang=en"' in page
+    assert 'href="preview?lang=en"' in page
     assert 'name="backend" value="mqtt"' in page
     assert 'class="nav-mark unifi-mark"' in page
     assert "#0559C9" in page
+
+
+def test_hotspot_preview_is_responsive_and_safe() -> None:
+    workspace = _portal_preview("ru")
+    content = _portal_preview_content("ru")
+
+    assert 'sandbox=""' in workspace
+    assert 'data-preview-width="390"' in workspace
+    assert 'data-preview-width="760"' in workspace
+    assert 'src="preview/content?lang=ru"' in workspace
+    assert 'src="../logo"' in content
+    assert "autofocus" not in content
+    assert "Wi-Fi вход" in content
 
 
 def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
