@@ -23,6 +23,8 @@ from .unifi import UniFiClient, UniFiClientNotFoundError
 router = APIRouter(prefix="/admin")
 ADMIN_ROOT = "./"
 LOGO_PATH = Path(__file__).with_name("assets") / "ahs.png"
+WB_LOGO_PATH = Path(__file__).with_name("assets") / "wb.png"
+WB_SCRIPT_PATH = Path(__file__).parent.parent / "wirenboard" / "send_sms.js"
 
 TEXT = {
     "en": {
@@ -78,6 +80,27 @@ TEXT = {
         "cancel": "Cancel",
         "confirm": "Continue",
         "characters": "characters",
+        "wb": "WB",
+        "wb_title": "Wiren Board",
+        "wb_help": "SMS delivery, diagnostics and the required controller script.",
+        "sms_journal": "SMS journal",
+        "sms_journal_help": "All successful and failed delivery attempts.",
+        "sms_empty": "No SMS messages have been sent yet",
+        "date": "Date",
+        "backend": "Backend",
+        "error_details": "Error",
+        "connection": "Connection",
+        "mqtt_host": "MQTT server",
+        "mqtt_topic": "Send topic",
+        "configured": "Configured",
+        "required_script": "Required WB script",
+        "script_help": "Install this file in /etc/wb-rules/send_sms.js on Wiren Board.",
+        "view_script": "View file",
+        "download": "Download",
+        "search_sms": "Search SMS journal",
+        "sent": "Sent",
+        "failed": "Failed",
+        "unifi_help": "Guest portal settings, active clients and authorization archive.",
     },
     "ru": {
         "active": "Активные",
@@ -132,6 +155,27 @@ TEXT = {
         "cancel": "Отмена",
         "confirm": "Продолжить",
         "characters": "символов",
+        "wb": "WB",
+        "wb_title": "Wiren Board",
+        "wb_help": "Отправка SMS, диагностика и обязательный скрипт контроллера.",
+        "sms_journal": "Журнал SMS",
+        "sms_journal_help": "Все успешные и неуспешные попытки отправки.",
+        "sms_empty": "SMS пока не отправлялись",
+        "date": "Дата",
+        "backend": "Канал",
+        "error_details": "Ошибка",
+        "connection": "Подключение",
+        "mqtt_host": "MQTT-сервер",
+        "mqtt_topic": "Топик отправки",
+        "configured": "Настроено",
+        "required_script": "Обязательный скрипт WB",
+        "script_help": "Установите файл в /etc/wb-rules/send_sms.js на Wiren Board.",
+        "view_script": "Показать файл",
+        "download": "Скачать",
+        "search_sms": "Поиск по журналу SMS",
+        "sent": "Отправлено",
+        "failed": "Ошибка",
+        "unifi_help": "Настройка гостевого портала, активные клиенты и архив авторизаций.",
     },
 }
 
@@ -149,6 +193,27 @@ async def admin_home(
     store: Store = Depends(get_store),
 ) -> HTMLResponse:
     lang = _lang(request)
+    message = request.query_params.get("message", "")
+    error = request.query_params.get("error", "")
+    return HTMLResponse(
+        _layout(
+            "Wiren Board",
+            _messages(message, error)
+            + _wb_overview(settings, lang)
+            + _sms_log_table(store.list_sms_log(), lang),
+            active_tab="wb",
+            lang=lang,
+        )
+    )
+
+
+@router.get("/unifi", response_class=HTMLResponse)
+async def admin_unifi(
+    request: Request,
+    settings: Settings = Depends(require_admin),
+    store: Store = Depends(get_store),
+) -> HTMLResponse:
+    lang = _lang(request)
     hotspot_store = HotspotStore(store)
     sessions = hotspot_store.list_active_sessions()
     unifi_clients = await _safe_unifi_clients(settings)
@@ -156,11 +221,11 @@ async def admin_home(
     error = request.query_params.get("error", "")
     return HTMLResponse(
         _layout(
-            "Active clients",
+            "UniFi",
             _messages(message, error)
-            + _dashboard_cards(settings, lang, "active")
+            + _settings_form(settings, lang, "active")
             + _active_table(settings, sessions, unifi_clients, lang),
-            active_tab="active",
+            active_tab="unifi",
             lang=lang,
         )
     )
@@ -180,9 +245,8 @@ def admin_archive(
         _layout(
             "Archive",
             _messages(message, error)
-            + _dashboard_cards(settings, lang, "archive")
             + _archive_table(rows, lang),
-            active_tab="archive",
+            active_tab="unifi",
             lang=lang,
         )
     )
@@ -192,6 +256,16 @@ def admin_archive(
 def admin_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
     logo_path = Path(settings.hotspot_logo_path)
     return FileResponse(logo_path if logo_path.exists() else LOGO_PATH)
+
+
+@router.get("/wb-logo")
+def wb_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
+    return FileResponse(WB_LOGO_PATH)
+
+
+@router.get("/send_sms.js")
+def download_wb_script(settings: Settings = Depends(require_admin)) -> FileResponse:
+    return FileResponse(WB_SCRIPT_PATH, filename="send_sms.js", media_type="text/javascript")
 
 
 @router.get("/archive.csv")
@@ -231,11 +305,11 @@ async def extend_client(
     store: Store = Depends(get_store),
 ):
     if days not in (1, 2, 7, 365):
-        return _redirect(error="Invalid duration", lang=lang, root="../../")
+        return _redirect(error="Invalid duration", lang=lang, root="../../unifi")
     hotspot_store = HotspotStore(store)
     session = hotspot_store.get_session(client_mac)
     if not session:
-        return _redirect(error="Client was not found", lang=lang, root="../../")
+        return _redirect(error="Client was not found", lang=lang, root="../../unifi")
     now = int(time.time())
     remaining_minutes = max(0, int(session["valid_until"] or now) - now) // 60
     minutes = remaining_minutes + days * 24 * 60
@@ -248,7 +322,7 @@ async def extend_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../")
+        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../unifi")
     authorized_at = hotspot_store.mark_authorized(client_mac, minutes)
     session = hotspot_store.get_session(client_mac)
     record_access_event(
@@ -261,7 +335,7 @@ async def extend_client(
             session["valid_until"],
         ),
     )
-    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../")
+    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../unifi")
 
 
 @router.post("/clients/{client_mac}/revoke")
@@ -276,9 +350,9 @@ async def revoke_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang, root="../../")
+        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang, root="../../unifi")
     HotspotStore(store).clear_authorized(client_mac)
-    return _redirect(message="Authorization revoked", lang=lang, root="../../")
+    return _redirect(message="Authorization revoked", lang=lang, root="../../unifi")
 
 
 @router.post("/clients/{client_mac}/name")
@@ -290,8 +364,8 @@ def update_client_name(
     store: Store = Depends(get_store),
 ):
     if not HotspotStore(store).set_display_name(client_mac, display_name):
-        return _redirect(error="Client was not found", lang=lang, root="../../")
-    return _redirect(message="Client name updated", lang=lang, root="../../")
+        return _redirect(error="Client was not found", lang=lang, root="../../unifi")
+    return _redirect(message="Client name updated", lang=lang, root="../../unifi")
 
 
 @router.post("/clients/{client_mac}/block")
@@ -304,9 +378,9 @@ async def block_client(
     try:
         await UniFiClient(settings).block_client(client_mac)
     except Exception as exc:
-        return _redirect(error=f"UniFi block failed: {exc}", lang=lang, root="../../")
+        return _redirect(error=f"UniFi block failed: {exc}", lang=lang, root="../../unifi")
     HotspotStore(store).mark_blocked(client_mac, "Blocked from admin")
-    return _redirect(message="Client blocked", lang=lang, root="../../")
+    return _redirect(message="Client blocked", lang=lang, root="../../unifi")
 
 
 @router.post("/settings")
@@ -329,7 +403,7 @@ async def update_settings(
             shutil.copyfileobj(logo.file, output)
         _set_env_value(settings_path, "HOTSPOT_LOGO_PATH", str(logo_path))
     get_settings.cache_clear()
-    return _redirect(message=_t(lang, "portal_saved"), lang=lang)
+    return _redirect(message=_t(lang, "portal_saved"), lang=lang, root="unifi")
 
 
 @router.post("/test-sms")
@@ -445,6 +519,42 @@ def _dashboard_cards(settings: Settings, lang: str, active_tab: str) -> str:
     return f'<div class="dashboard-grid">{_settings_form(settings, lang, active_tab)}{_test_sms_form(lang)}</div>'
 
 
+def _wb_overview(settings: Settings, lang: str) -> str:
+    script = html.escape(WB_SCRIPT_PATH.read_text(encoding="utf-8"))
+    connection = (
+        f"{html.escape(settings.wb_mqtt_host)}:{settings.wb_mqtt_port}"
+        if settings.sms_backend == "mqtt"
+        else html.escape(settings.sms_backend)
+    )
+    return f"""
+    <section class="product-intro ha-card">
+      <img class="product-logo" src="wb-logo" alt="Wiren Board">
+      <div><h2>{_t(lang, 'wb_title')}</h2><p>{_t(lang, 'wb_help')}</p></div>
+    </section>
+    <div class="dashboard-grid wb-grid">
+      {_test_sms_form(lang)}
+      <section class="ha-card connection-card">
+        <div class="card-heading">
+          <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 15-4-4 1.4-1.4L11 14.2l4.6-4.6L17 11l-6 6Z"/></svg></span>
+          <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'configured')}</p></div>
+        </div>
+        <dl class="connection-list card-content">
+          <div><dt>{_t(lang, 'backend')}</dt><dd>{html.escape(settings.sms_backend.upper())}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+        </dl>
+      </section>
+    </div>
+    <section class="ha-card script-card">
+      <div class="section-head card-heading">
+        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
+        <a class="secondary-button" href="send_sms.js" download>{_t(lang, 'download')}</a>
+      </div>
+      <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
+    </section>
+    """
+
+
 def _test_sms_form(lang: str) -> str:
     return f"""
     <section class="ha-card sms-card">
@@ -460,6 +570,40 @@ def _test_sms_form(lang: str) -> str:
         <label class="field"><span>{_t(lang, "message")} <small id="message-counter">0 / 1000 {_t(lang, "characters")}</small></span><textarea id="sms-message" name="message" maxlength="1000" rows="3" required></textarea></label>
         <div class="card-actions"><button class="primary-button" type="submit">{_t(lang, "send")}</button></div>
       </form>
+    </section>
+    """
+
+
+def _sms_log_table(rows, lang: str) -> str:
+    table_rows = []
+    for row in rows:
+        status = str(row["status"])
+        search_text = html.escape(
+            f"{row['phone']} {row['message']} {row['backend']} {status} {row['error'] or ''}".lower(),
+            quote=True,
+        )
+        error = html.escape(str(row["error"] or ""))
+        table_rows.append(
+            f"<tr data-filter-row data-search='{search_text}'>"
+            f"<td data-label='{_t(lang, 'date')}'>{_dt(row['created_at'])}</td>"
+            f"<td data-label='{_t(lang, 'phone')}'>{html.escape(str(row['phone']))}</td>"
+            f"<td data-label='{_t(lang, 'message')}' class='sms-message-cell'>{html.escape(str(row['message']))}</td>"
+            f"<td data-label='{_t(lang, 'backend')}'>{html.escape(str(row['backend']).upper())}</td>"
+            f"<td data-label='{_t(lang, 'status')}'><span class='badge {status}'>{_t(lang, status)}</span></td>"
+            f"<td data-label='{_t(lang, 'error_details')}'>{error}</td>"
+            "</tr>"
+        )
+    body = "\n".join(table_rows) if table_rows else f"<tr class='empty-row'><td colspan='6' class='empty'>{_t(lang, 'sms_empty')}</td></tr>"
+    return f"""
+    <section class="ha-card clients-card">
+      <div class="section-head card-heading table-heading">
+        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 3h18v2H3V3Zm0 4h18v14H3V7Zm2 2v10h14V9H5Zm2 2h6v2H7v-2Zm0 4h10v2H7v-2Z"/></svg></span><div><h2>{_t(lang, 'sms_journal')}</h2><p>{_t(lang, 'sms_journal_help')}</p></div></div>
+      </div>
+      {_table_toolbar(lang, 'sms')}
+      <div class="table-scroll"><table class="filter-table sms-log-table" data-filter-table="sms">
+        <thead><tr><th>{_t(lang, 'date')}</th><th>{_t(lang, 'phone')}</th><th>{_t(lang, 'message')}</th><th>{_t(lang, 'backend')}</th><th>{_t(lang, 'status')}</th><th>{_t(lang, 'error_details')}</th></tr></thead>
+        <tbody>{body}</tbody>
+      </table></div>
     </section>
     """
 
@@ -481,7 +625,7 @@ def _active_table(
         rows.append(
             f"<tr data-filter-row data-search='{search_text}'>"
             f"<td data-label='{_t(lang, 'client')}'>{_client_identity(session, client, mac, lang)}</td>"
-            f"<td data-label='{_t(lang, 'phone')}'><div class='value-actions'><span>{html.escape(phone)}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button><button type='button' class='text-button sms-client-button' data-phone='{html.escape(phone, quote=True)}'>{_t(lang, 'write_sms')}</button></div></td>"
+            f"<td data-label='{_t(lang, 'phone')}'><div class='value-actions'><span>{html.escape(phone)}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button></div></td>"
             f"<td data-label='{_t(lang, 'ip')}'>{html.escape(ip_address)}</td>"
             f"<td data-label='{_t(lang, 'authorized')}'>{_dt(session['authorized_at'])}</td>"
             f"<td data-label='{_t(lang, 'valid_until')}'>{_dt(session['valid_until'])}</td>"
@@ -594,7 +738,11 @@ def _archive_table(rows, lang: str) -> str:
 
 
 def _table_toolbar(lang: str, table_name: str) -> str:
-    placeholder = _t(lang, "search_archive" if table_name == "archive" else "search_clients")
+    placeholder_key = {
+        "archive": "search_archive",
+        "sms": "search_sms",
+    }.get(table_name, "search_clients")
+    placeholder = _t(lang, placeholder_key)
     return f"""
     <div class="table-toolbar">
       <label class="search-field">
@@ -664,8 +812,24 @@ def _tabs(lang: str, active_tab: str) -> str:
     archive = "class='active'" if active_tab == "archive" else ""
     return f"""
     <nav class="tabs">
-      <a href="./?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
+      <a href="unifi?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
       <a href="archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
+    </nav>
+    """
+
+
+def _product_nav(lang: str, active_tab: str) -> str:
+    wb_active = "class='active'" if active_tab == "wb" else ""
+    unifi_active = "class='active'" if active_tab == "unifi" else ""
+    return f"""
+    <nav class="product-nav" aria-label="Products">
+      <a href="./?lang={html.escape(lang)}" {wb_active}>
+        <img src="wb-logo" alt=""> <span>WB</span>
+      </a>
+      <a href="unifi?lang={html.escape(lang)}" {unifi_active}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM7.76 14.26l1.42 1.42a4 4 0 0 1 5.64 0l1.42-1.42a6 6 0 0 0-8.48 0ZM4.93 11.43l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42a10 10 0 0 0-14.14 0ZM2.1 8.6 3.5 10a12 12 0 0 1 17 0l1.4-1.4a14 14 0 0 0-19.8 0Z"/></svg>
+        <span>UniFi</span>
+      </a>
     </nav>
     """
 
@@ -679,7 +843,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="icon" href="logo">
+        <link rel="icon" href="wb-logo">
         <title>{html.escape(title)} - SMS Gateway Admin</title>
         <script>
           const savedTheme = localStorage.getItem("sms-theme");
@@ -693,7 +857,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           body {{ margin: 0; min-height: 100vh; font-family: Roboto, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }}
           header {{ position: sticky; top: 0; z-index: 20; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 10px max(20px, calc((100vw - 1280px) / 2)); background: var(--surface); border-bottom: 1px solid var(--divider); box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
           .brand {{ display: flex; align-items: center; gap: 12px; min-width: 0; }}
-          .brand-mark {{ width: 40px; height: 40px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #53bd00; color: #fff; font-size: 18px; font-weight: 900; letter-spacing: -2px; }}
+          .brand-logo {{ width: 40px; height: 40px; display: block; flex: 0 0 auto; object-fit: contain; }}
           header h1 {{ margin: 0; font-size: 18px; font-weight: 500; line-height: 1.2; }}
           .brand p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
           .header-controls, .language, .table-tools, .value-actions, .muted-line {{ display: flex; align-items: center; gap: 8px; }}
@@ -702,6 +866,16 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
           .language a.active {{ color: #fff; background: var(--primary); }}
           main {{ max-width: 1280px; margin: 0 auto; padding: 24px 20px 48px; }}
+          .product-nav {{ max-width: 1280px; margin: 0 auto 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 180px)); gap: 12px; }}
+          .product-nav a {{ min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 16px; font-weight: 600; transition: border-color .15s, background .15s; }}
+          .product-nav a:hover {{ border-color: var(--primary); }}
+          .product-nav a.active {{ border-color: var(--primary); background: rgba(3,169,244,.09); color: var(--primary); }}
+          .product-nav img, .product-nav svg {{ width: 30px; height: 30px; object-fit: contain; }}
+          .product-nav svg {{ fill: currentColor; }}
+          .product-intro {{ display: flex; align-items: center; gap: 18px; padding: 18px 20px; }}
+          .product-intro h2 {{ margin: 0; font-size: 20px; font-weight: 500; }}
+          .product-intro p {{ margin: 4px 0 0; color: var(--muted); }}
+          .product-logo {{ width: 56px; height: 56px; object-fit: contain; flex: 0 0 auto; }}
           .dashboard-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, .72fr); gap: 20px; align-items: start; margin-bottom: 20px; }}
           .ha-card {{ min-width: 0; margin: 0 0 20px; overflow: hidden; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }}
           .dashboard-grid .ha-card {{ margin-bottom: 0; }}
@@ -711,6 +885,14 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .card-icon {{ width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
           .card-icon svg {{ width: 23px; height: 23px; fill: currentColor; }}
           .card-content {{ padding: 4px 20px 20px; }}
+          .connection-list {{ display: grid; gap: 0; margin: 0; }}
+          .connection-list div {{ display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--divider); }}
+          .connection-list div:last-child {{ border-bottom: 0; }}
+          .connection-list dt {{ color: var(--muted); }} .connection-list dd {{ min-width: 0; margin: 0; overflow-wrap: anywhere; }}
+          code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+          .script-details summary {{ padding: 15px 20px; color: var(--primary); font-weight: 500; cursor: pointer; }}
+          .script-details pre {{ max-height: 460px; margin: 0; overflow: auto; padding: 18px 20px; border-top: 1px solid var(--divider); background: #111820; color: #e6edf3; font-size: 12px; line-height: 1.55; white-space: pre; }}
+          .sms-message-cell {{ max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }}
           form.settings, form.test-sms {{ display: grid; gap: 16px; }}
           .field {{ display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 500; }}
           .field > span {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
@@ -774,7 +956,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .empty {{ padding: 40px 20px; color: var(--muted); text-align: center; }}
           .empty strong {{ display: block; margin-bottom: 5px; color: var(--text); font-size: 15px; font-weight: 500; }}
           .badge {{ display: inline-flex; padding: 5px 9px; border-radius: 999px; background: #e6e9ed; font-weight: 600; font-size: 11px; text-transform: capitalize; }}
-          .badge.active {{ background: #e6f4ea; color: #188038; }} .badge.revoked {{ background: #fef7e0; color: #b06000; }} .badge.blocked {{ background: #fce8e6; color: #c5221f; }}
+          .badge.active, .badge.sent {{ background: #e6f4ea; color: #188038; }} .badge.revoked {{ background: #fef7e0; color: #b06000; }} .badge.blocked, .badge.failed {{ background: #fce8e6; color: #c5221f; }}
           .export-button {{ white-space: nowrap; }}
           .theme-toggle {{ width: 38px; min-height: 38px; padding: 0; border: 1px solid var(--divider); border-radius: 50%; background: var(--surface); color: var(--muted); }}
           .theme-toggle:hover {{ background: var(--surface-2); color: var(--primary); }}
@@ -791,13 +973,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
           @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 16px 12px 36px; }} header {{ padding: 10px 14px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
-          @media (max-width: 640px) {{ .card-heading {{ padding: 16px; }} .card-content {{ padding: 2px 16px 16px; }} .table-toolbar {{ flex-wrap: wrap; padding: 12px 16px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 12px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 12px; padding: 12px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: start; width: 100%; padding: 11px 12px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .product-intro {{ align-items: flex-start; }} .connection-list div {{ grid-template-columns: 1fr; gap: 4px; }} .card-heading {{ padding: 16px; }} .card-content {{ padding: 2px 16px 16px; }} .table-toolbar {{ flex-wrap: wrap; padding: 12px 16px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 12px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 12px; padding: 12px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: start; width: 100%; padding: 11px 12px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
         </style>
       </head>
       <body>
         <header>
           <div class="brand">
-            <span class="brand-mark" aria-hidden="true">wb</span>
+            <img class="brand-logo" src="wb-logo" alt="Wiren Board">
             <div><h1>SMS Gateway</h1><p>{_t(lang, "subtitle")}</p></div>
           </div>
           <div class="header-controls">
@@ -808,7 +990,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
             </button>
           </div>
         </header>
-        <main>{content}</main>
+        <main>{_product_nav(lang, active_tab)}{content}</main>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
         <dialog id="confirm-dialog">
           <div class="dialog-content"><h2>{_t(lang, "confirm_title")}</h2><p>{_t(lang, "confirm_text")}</p></div>
@@ -862,14 +1044,6 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           }}
           if (smsMessage) smsMessage.addEventListener("input", updateMessageCounter);
           updateMessageCounter();
-          document.querySelectorAll(".sms-client-button").forEach((button) => {{
-            button.addEventListener("click", () => {{
-              if (!smsPhone) return;
-              smsPhone.value = button.dataset.phone;
-              document.querySelector(".sms-card").scrollIntoView({{ behavior: "smooth", block: "center" }});
-              setTimeout(() => (smsMessage || smsPhone).focus(), 350);
-            }});
-          }});
           document.querySelectorAll("[data-filter-input]").forEach((input) => {{
             const tableName = input.dataset.filterInput;
             const table = document.querySelector(`[data-filter-table="${{tableName}}"]`);

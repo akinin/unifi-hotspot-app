@@ -2,8 +2,10 @@ from dataclasses import dataclass
 import re
 import subprocess
 import time
+from typing import Optional
 
 from .config import Settings
+from .store import Store
 
 
 @dataclass
@@ -11,12 +13,32 @@ class SmsSender:
     settings: Settings
 
     def send(self, phone: str, message: str) -> None:
-        if self.settings.sms_backend == "mmcli":
-            self._send_via_mmcli(phone, message)
-            return
-        if self.settings.sms_backend != "mqtt":
-            raise RuntimeError(f"Unsupported SMS_BACKEND: {self.settings.sms_backend}")
-        self._send_via_mqtt(phone, message)
+        try:
+            if self.settings.sms_backend == "mmcli":
+                self._send_via_mmcli(phone, message)
+            elif self.settings.sms_backend == "mqtt":
+                self._send_via_mqtt(phone, message)
+            else:
+                raise RuntimeError(f"Unsupported SMS_BACKEND: {self.settings.sms_backend}")
+        except Exception as exc:
+            self._record(phone, message, "failed", str(exc))
+            raise
+        self._record(phone, message, "sent")
+
+    def _record(
+        self,
+        phone: str,
+        message: str,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        Store(self.settings.database_path).record_sms(
+            phone=phone,
+            message=message,
+            backend=self.settings.sms_backend,
+            status=status,
+            error=error,
+        )
 
     def _send_via_mqtt(self, phone: str, message: str) -> None:
         try:
