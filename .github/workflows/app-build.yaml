@@ -25,7 +25,9 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: app
         shell: bash
-        run: echo "version=$(sed -n 's/^version: \"\(.*\)\"/\1/p' home-assistant-app/config.yaml)" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(sed -n 's/^version: "\(.*\)"/\1/p' home-assistant-app/config.yaml)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
