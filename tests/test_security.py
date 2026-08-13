@@ -101,7 +101,7 @@ def test_hotspot_preview_is_responsive_and_safe() -> None:
     workspace = _portal_preview(settings, "ru")
     content = _portal_preview_content("ru", settings, 164)
 
-    assert 'sandbox="allow-scripts"' in workspace
+    assert 'sandbox="allow-scripts allow-same-origin"' in workspace
     assert 'data-preview-width="390"' in workspace
     assert 'data-preview-width="760"' in workspace
     assert 'action="settings"' in workspace
@@ -156,10 +156,16 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "Dry-run" in page
     assert "API key" in page
     assert "secret-key" not in page
-    assert 'src="unifi-logo"' in page
+    assert 'src="logo"' in page
     assert page.count('class="ha-card hotspot-overview-card"') == 1
-    assert 'class="portal-overview-pane"' in page
-    assert 'class="connection-overview-pane"' in page
+    assert 'class="hotspot-overview-details card-content"' in page
+    assert "hotspot-overview-grid" not in page
+
+
+def test_preview_iframe_allows_same_origin_assets() -> None:
+    page = _portal_preview(Settings(app_role="admin"), "en")
+
+    assert 'sandbox="allow-scripts allow-same-origin"' in page
 
 
 def test_usb_backend_uses_supplied_usb_branding() -> None:
