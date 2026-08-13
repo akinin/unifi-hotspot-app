@@ -35,9 +35,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/akinin/wirenboard-sms-app:${{ steps.app.outputs.version }}
-            ghcr.io/akinin/wirenboard-sms-app:latest
+            ghcr.io/akinin/unifi-hotspot-app:${{ steps.app.outputs.version }}
+            ghcr.io/akinin/unifi-hotspot-app:latest
           labels: |
             io.hass.type=app
-            io.hass.name=Wiren Board SMS Gateway
-            org.opencontainers.image.source=https://github.com/akinin/wirenboard-sms
+            io.hass.name=UniFi Hotspot
+            org.opencontainers.image.source=https://github.com/akinin/unifi-hotspot-app

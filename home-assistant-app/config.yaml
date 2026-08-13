@@ -1,8 +1,8 @@
 name: UniFi Hotspot
-version: "0.6.4"
+version: "0.6.5"
 slug: wirenboard_sms
 description: UniFi guest portal with an integrated WB or USB SMS gateway
-url: https://github.com/akinin/wirenboard-sms/tree/main/home-assistant-app
+url: https://github.com/akinin/unifi-hotspot-app/tree/main/home-assistant-app
 arch:
   - aarch64
   - amd64
@@ -90,6 +90,6 @@ schema:
     length: int(4,10)
     resend_seconds: int(10,3600)
     max_attempts: int(1,20)
-image: ghcr.io/akinin/wirenboard-sms-app
+image: ghcr.io/akinin/unifi-hotspot-app
 usb: true
 udev: true
