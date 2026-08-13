@@ -293,6 +293,7 @@ async def admin_home(
     hotspot_store = HotspotStore(store)
     sessions = hotspot_store.list_active_sessions()
     unifi_clients = await _safe_unifi_clients(settings)
+    _apply_cached_client_ips(hotspot_store, unifi_clients)
     active_count = len(_merged_active_records(sessions, unifi_clients))
     message = request.query_params.get("message", "")
     error = request.query_params.get("error", "")
@@ -697,6 +698,17 @@ async def _safe_unifi_clients(settings: Settings) -> dict[str, dict[str, Any]]:
         for client in clients
         if client.get("mac")
     }
+
+
+def _apply_cached_client_ips(
+    hotspot_store: HotspotStore,
+    unifi_clients: dict[str, dict[str, Any]],
+) -> None:
+    hotspot_store.remember_client_ips(list(unifi_clients.values()))
+    cached_ips = hotspot_store.cached_client_ips()
+    for mac, client in unifi_clients.items():
+        if not client.get("ip") and cached_ips.get(mac):
+            client["ip"] = cached_ips[mac]
 
 
 def _set_env_value(path: Path, key: str, value: str) -> None:
@@ -1430,10 +1442,10 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .client-actions-trigger {{ white-space: nowrap; }}
           .client-actions-popover {{ position: fixed; inset: auto; width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px); margin: 0; padding: 11px; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.28); }}
           .client-actions-popover > strong {{ display: block; margin-bottom: 8px; font-size: 12px; }}
-          .client-actions-popover .actions form {{ display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }}
-          .client-actions-popover .actions button {{ min-width: 0; padding: 0 5px; }}
-          .client-danger-actions {{ display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }}
-          .client-danger-actions .actions, .client-danger-actions form, .client-danger-actions button {{ width: 100%; }}
+          .client-actions-popover > .actions form {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; }}
+          .client-actions-popover > .actions button {{ min-width: 0; padding: 0 5px; }}
+          .client-danger-actions {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }}
+          .client-danger-actions .actions, .client-danger-actions form, .client-danger-actions button {{ display: block; min-width: 0; width: 100%; }}
           .client-display {{ min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text); font-weight: 500; text-align: left; }}
           .client-display:hover {{ color: var(--primary); background: transparent; }}
           .client-name input {{ width: 170px; min-height: 34px; padding: 6px 8px; }}
