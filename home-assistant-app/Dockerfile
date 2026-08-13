@@ -3,7 +3,7 @@ FROM ${BUILD_FROM}
 
 WORKDIR /opt/sms-gateway
 COPY requirements.txt ./requirements.txt
-RUN apk add --no-cache py3-pip python3 \
+RUN apk add --no-cache dbus modemmanager py3-pip python3 \
     && python3 -m pip install --no-cache-dir --break-system-packages \
         -r requirements.txt
 
@@ -18,6 +18,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 ENTRYPOINT ["/init"]
 
 LABEL \
-    org.opencontainers.image.title="Home Assistant App: Wiren Board SMS Gateway" \
-    org.opencontainers.image.description="SMS API and UniFi hotspot portal through Wiren Board" \
+    org.opencontainers.image.title="Home Assistant App: UniFi Hotspot" \
+    org.opencontainers.image.description="UniFi guest portal with an integrated WB or USB SMS gateway" \
     org.opencontainers.image.source="https://github.com/akinin/wirenboard-sms"

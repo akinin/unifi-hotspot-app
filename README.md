@@ -1,7 +1,7 @@
-# Wiren Board SMS Gateway
+# UniFi Hotspot and SMS Gateway
 
-HTTP API для отправки SMS и одноразовых кодов, а также опциональный UniFi
-hotspot-портал с авторизацией гостей по SMS.
+UniFi hotspot-портал с авторизацией гостей по SMS и встроенным SMS Gateway.
+Транспорт отправки выбирается между Wiren Board/MQTT и USB/ModemManager.
 
 ## Home Assistant App
 

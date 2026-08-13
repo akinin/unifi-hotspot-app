@@ -1,7 +1,7 @@
-name: Wiren Board SMS Gateway
-version: "0.4.2"
+name: UniFi Hotspot
+version: "0.5.0"
 slug: wirenboard_sms
-description: SMS API and optional UniFi guest portal through Wiren Board
+description: UniFi guest portal with an integrated WB or USB SMS gateway
 url: https://github.com/akinin/wirenboard-sms/tree/main/home-assistant-app
 arch:
   - aarch64
@@ -12,8 +12,8 @@ stage: experimental
 ingress: true
 ingress_port: 8089
 ingress_entry: admin/
-panel_icon: mdi:message-text-outline
-panel_title: SMS Gateway
+panel_icon: mdi:wifi-lock
+panel_title: UniFi Hotspot
 ports:
   8088/tcp: 18088
   8880/tcp: 18880
@@ -23,6 +23,8 @@ ports_description:
 options:
   api_token: ""
   app_secret: ""
+  sms_backend: mqtt
+  mmcli_modem_id: any
   wb_mqtt_host: 10.10.100.5
   wb_mqtt_port: 1884
   wb_mqtt_username: ""
@@ -46,6 +48,8 @@ options:
 schema:
   api_token: password
   app_secret: password
+  sms_backend: str
+  mmcli_modem_id: str
   wb_mqtt_host: str
   wb_mqtt_port: port
   wb_mqtt_username: str?
@@ -67,3 +71,5 @@ schema:
   otp_resend_seconds: int(10,3600)
   otp_max_attempts: int(1,20)
 image: ghcr.io/akinin/wirenboard-sms-app
+usb: true
+udev: true

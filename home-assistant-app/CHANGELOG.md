@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- Reposition the Home Assistant App as UniFi Hotspot with an integrated SMS transport.
+- Make Hotspot the default workspace and keep SMS Gateway as a secondary WB/USB workspace.
+- Preserve the existing app slug and persistent data for an in-place upgrade.
+- Expose MQTT and USB ModemManager backend selection in app settings.
+- Use the supplied UniFi artwork for the Home Assistant app icon and the supplied USB artwork for the USB transport.
+
 ## 0.4.2
 
 - Replace the UniFi artwork everywhere with the supplied PNG without redrawing it.
