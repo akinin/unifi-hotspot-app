@@ -1,14 +1,13 @@
 name: UniFi Hotspot
-version: "0.6.5"
+version: "0.6.6"
 slug: wirenboard_sms
-description: UniFi guest portal with an integrated WB or USB SMS gateway
+description: Гостевой портал UniFi с авторизацией по SMS через Wiren Board или USB-модем
 url: https://github.com/akinin/unifi-hotspot-app/tree/main/home-assistant-app
 arch:
   - aarch64
   - amd64
 init: false
 startup: services
-stage: experimental
 ingress: true
 ingress_port: 8089
 ingress_entry: admin/
