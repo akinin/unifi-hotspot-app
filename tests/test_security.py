@@ -1,10 +1,12 @@
 import asyncio
+import time
 
 import pytest
 from fastapi import HTTPException
 
 from api.config import Settings
 from api.deps import require_api_token
+from api.sms_monitor import WBSmsMonitor
 from hotspot.admin import (
     _active_table,
     _archive_table,
@@ -106,3 +108,34 @@ def test_sms_store_records_delivery_history(tmp_path) -> None:
     assert rows[0]["phone"] == "+79990000000"
     assert rows[0]["message"] == "test"
     assert rows[0]["status"] == "sent"
+
+
+def test_wb_monitor_records_and_deduplicates_confirmed_sms(tmp_path) -> None:
+    from api.store import Store
+
+    store = Store(str(tmp_path / "sms.sqlite3"))
+    monitor = WBSmsMonitor(
+        Settings(wb_sms_topic="/devices/sms_sender/controls/send/on"),
+        store,
+    )
+
+    assert monitor.topic_root == "/devices/sms_sender/controls"
+    values = {
+        "last_sent_time": "2026-08-13T14:30:00.123Z",
+        "last_message_text": "Test from Home Assistant",
+        "last_recipient_number": "+79990000000",
+        "last_result": "Команда отправки передана",
+    }
+    for field, value in values.items():
+        monitor.handle_value(field, value)
+    time.sleep(0.35)
+
+    rows = store.list_sms_log()
+    assert len(rows) == 1
+    assert rows[0]["backend"] == "wb"
+    assert rows[0]["status"] == "sent"
+
+    for field, value in values.items():
+        monitor.handle_value(field, value)
+    time.sleep(0.35)
+    assert len(store.list_sms_log()) == 1
