@@ -401,12 +401,17 @@ def _authorization_window(
 
 
 def _page_request_phone(
-    client_mac: str, ap_mac: str, redirect_url: str, client_ip: str, lang: str
+    client_mac: str,
+    ap_mac: str,
+    redirect_url: str,
+    client_ip: str,
+    lang: str,
+    logo_size: Optional[int] = None,
 ) -> str:
     return f"""
     <!doctype html>
     <html lang="{escape(lang)}">
-        <head>{_head(_pt(lang, "wifi_login"))}</head>
+        <head>{_head(_pt(lang, "wifi_login"), logo_size)}</head>
       <body>
         <main>
           {_brand()}
@@ -586,7 +591,12 @@ def _brand() -> str:
     """
 
 
-def _head(title: str) -> str:
+def _head(title: str, logo_size: Optional[int] = None) -> str:
+    settings = get_settings()
+    background = settings.hotspot_background_color
+    if not _is_hex_color(background):
+        background = "#10141b"
+    size = max(64, min(240, logo_size or settings.hotspot_logo_size))
     return f"""
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -596,10 +606,10 @@ def _head(title: str) -> str:
         :root {{ color-scheme: dark; }}
         * {{ box-sizing: border-box; }}
         [hidden] {{ display: none !important; }}
-        body {{ min-height: 100vh; margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: radial-gradient(circle at top, #273142 0, #10141b 42%, #07090d 100%); color: #f4f7fb; }}
+        body {{ min-height: 100vh; margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background-color: {background}; background-image: radial-gradient(circle at top, color-mix(in srgb, {background}, white 24%) 0, {background} 42%, color-mix(in srgb, {background}, black 55%) 100%); color: #f4f7fb; }}
         body::before {{ content: ""; position: fixed; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0) 24%); }}
         main {{ width: min(420px, calc(100vw - 32px)); margin: 8vh auto 0; padding-bottom: 32px; }}
-        .logo {{ display: block; width: 132px; height: 132px; object-fit: contain; margin: 0 auto 28px; filter: drop-shadow(0 18px 28px rgba(0,0,0,.38)); }}
+        .logo {{ display: block; width: {size}px; height: {size}px; object-fit: contain; margin: 0 auto 28px; filter: drop-shadow(0 18px 28px rgba(0,0,0,.38)); }}
         h1 {{ font-size: 30px; line-height: 1.12; margin: 0 0 26px; text-align: center; letter-spacing: 0; }}
         form {{ display: grid; gap: 16px; }}
         label {{ display: grid; gap: 8px; font-size: 14px; color: #bac4d3; }}
@@ -627,3 +637,9 @@ def _head(title: str) -> str:
         }});
       </script>
     """
+
+
+def _is_hex_color(value: str) -> bool:
+    if len(value) != 7 or not value.startswith("#"):
+        return False
+    return all(character in "0123456789abcdefABCDEF" for character in value[1:])

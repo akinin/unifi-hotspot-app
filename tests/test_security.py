@@ -14,12 +14,13 @@ from hotspot.admin import (
     _layout,
     _portal_preview,
     _portal_preview_content,
+    _portal_summary,
     _redirect,
-    _settings_form,
     _sms_log_table,
     _tabs,
     _unifi_overview,
     _wb_overview,
+    update_settings,
 )
 from hotspot.api import (
     ExtendRequest,
@@ -66,8 +67,8 @@ def test_unifi_dry_run_does_not_require_credentials_or_network() -> None:
 def test_admin_markup_uses_ingress_safe_relative_links() -> None:
     settings = Settings(app_role="admin")
 
-    assert 'action="settings"' in _settings_form(settings, "en", "active")
-    assert 'src="logo"' in _settings_form(settings, "en", "active")
+    assert 'href="preview?lang=en"' in _portal_summary(settings, "en")
+    assert 'src="logo"' in _portal_summary(settings, "en")
     assert 'href="./?lang=en"' in _tabs("en", "active")
     assert 'href="archive.csv"' in _archive_table([], "en")
     assert _redirect(message="done", root="../../").headers["location"].startswith("../../?")
@@ -94,23 +95,55 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'href="./?lang=en"' in page
     assert 'href="wb?lang=en"' in page
     assert 'href="usb?lang=en"' in page
-    assert 'href="preview?lang=en"' in page
+    assert 'href="preview?lang=en"' in _tabs("en", "preview")
     assert 'name="backend" value="mqtt"' in page
     assert 'class="nav-mark unifi-mark"' in page
     assert "#0559C9" in page
 
 
 def test_hotspot_preview_is_responsive_and_safe() -> None:
-    workspace = _portal_preview("ru")
-    content = _portal_preview_content("ru")
+    settings = Settings(app_role="admin", hotspot_logo_size=164)
+    workspace = _portal_preview(settings, "ru")
+    content = _portal_preview_content("ru", settings, 164)
 
-    assert 'sandbox=""' in workspace
+    assert 'sandbox="allow-scripts"' in workspace
     assert 'data-preview-width="390"' in workspace
     assert 'data-preview-width="760"' in workspace
-    assert 'src="preview/content?lang=ru"' in workspace
-    assert 'src="../logo"' in content
+    assert 'action="settings"' in workspace
+    assert 'name="title"' in workspace
+    assert 'name="background"' in workspace
+    assert 'name="logo_size"' in workspace
+    assert "class='active'" in _tabs("ru", "preview")
+    assert 'src="data:image/png;base64,' in content
     assert "autofocus" not in content
     assert "Wi-Fi вход" in content
+    assert "background-image: radial-gradient" in content
+    assert "width: 164px" in content
+    assert "fetch(" not in content
+    assert 'data.type !== "portal-preview"' in content
+
+
+def test_hotspot_designer_persists_all_appearance_settings(tmp_path) -> None:
+    settings_file = tmp_path / "runtime.env"
+    settings = Settings(app_role="admin", settings_file_path=str(settings_file))
+
+    response = asyncio.run(
+        update_settings(
+            title="Guest portal",
+            background="#34125f",
+            logo_size=188,
+            return_to="preview",
+            lang="en",
+            logo=None,
+            settings=settings,
+        )
+    )
+    saved = settings_file.read_text(encoding="utf-8")
+
+    assert "HOTSPOT_PORTAL_TITLE=Guest portal" in saved
+    assert "HOTSPOT_BACKGROUND_COLOR=#34125f" in saved
+    assert "HOTSPOT_LOGO_SIZE=188" in saved
+    assert response.headers["location"].startswith("preview?")
 
 
 def test_unifi_workspace_shows_connection_state_without_secrets() -> None:

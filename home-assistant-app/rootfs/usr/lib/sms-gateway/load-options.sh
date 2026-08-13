@@ -17,6 +17,8 @@ export UNIFI_SITE="$(bashio::config 'unifi_site')"
 export UNIFI_VERIFY_TLS="$(bashio::config 'unifi_verify_tls')"
 export UNIFI_AUTH_MINUTES="$(bashio::config 'unifi_auth_minutes')"
 configured_portal_title="$(bashio::config 'hotspot_portal_title')"
+configured_background_color="$(bashio::config 'hotspot_background_color')"
+configured_logo_size="$(bashio::config 'hotspot_logo_size')"
 export TELEGRAM_BOT_TOKEN="$(bashio::config 'telegram_bot_token')"
 export TELEGRAM_CHAT_ID="$(bashio::config 'telegram_chat_id')"
 export OTP_TTL_SECONDS="$(bashio::config 'otp_ttl_seconds')"
@@ -30,8 +32,8 @@ export SETTINGS_FILE_PATH=/data/runtime.env
 export HOTSPOT_ACCESS_LOG_PATH=/data/hotspot_access.csv
 if [[ ! -e "${SETTINGS_FILE_PATH}" ]]; then
     safe_portal_title="${configured_portal_title//$'\n'/ }"
-    printf 'HOTSPOT_PORTAL_TITLE=%s\nHOTSPOT_LOGO_PATH=/data/hotspot_logo.png\n' \
-        "${safe_portal_title//$'\r'/ }" > "${SETTINGS_FILE_PATH}"
+    printf 'HOTSPOT_PORTAL_TITLE=%s\nHOTSPOT_BACKGROUND_COLOR=%s\nHOTSPOT_LOGO_SIZE=%s\nHOTSPOT_LOGO_PATH=/data/hotspot_logo.png\n' \
+        "${safe_portal_title//$'\r'/ }" "${configured_background_color}" "${configured_logo_size}" > "${SETTINGS_FILE_PATH}"
 fi
 
 configured_secret="$(bashio::config 'app_secret')"
