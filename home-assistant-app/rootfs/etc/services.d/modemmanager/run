@@ -2,4 +2,4 @@
 while [[ ! -S /run/dbus/system_bus_socket ]]; do
     sleep 0.2
 done
-exec ModemManager --debug
+exec ModemManager
