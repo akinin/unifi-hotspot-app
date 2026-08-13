@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/akinin/wirenboard-sms.git}"
+REPO_URL="${REPO_URL:-https://github.com/akinin/unifi-hotspot-app.git}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/sms-gateway}"
 SERVICE_USER="${SERVICE_USER:-root}"
 COMPONENTS="${COMPONENTS:-}"
@@ -139,13 +139,13 @@ sms_gateway_admin_state="\$(systemctl is-active sms-gateway-admin 2>/dev/null ||
 cat <<'MOTD'
 
 ============================================================
- Wiren Board SMS Gateway
+ UniFi Hotspot and SMS Gateway
 ============================================================
 MOTD
 printf ' Hostname:      %s\n' "\$(hostname)"
 printf ' IP address:    %s\n' "\${sms_gateway_ips:-unknown}"
 cat <<'MOTD'
- GitHub:        https://github.com/akinin/wirenboard-sms
+ GitHub:        https://github.com/akinin/unifi-hotspot-app
  Install dir:   $INSTALL_DIR
  Config:        $INSTALL_DIR/.env
  Data:          $INSTALL_DIR/data

@@ -20,4 +20,4 @@ ENTRYPOINT ["/init"]
 LABEL \
     org.opencontainers.image.title="Home Assistant App: UniFi Hotspot" \
     org.opencontainers.image.description="UniFi guest portal with an integrated WB or USB SMS gateway" \
-    org.opencontainers.image.source="https://github.com/akinin/wirenboard-sms"
+    org.opencontainers.image.source="https://github.com/akinin/unifi-hotspot-app"

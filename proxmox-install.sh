@@ -2,8 +2,8 @@
 set -euo pipefail
 
 PROJECT_NAME="sms-gateway"
-INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/akinin/wirenboard-sms/main/install.sh}"
-REPO_URL="${REPO_URL:-https://github.com/akinin/wirenboard-sms.git}"
+INSTALL_SCRIPT_URL="${INSTALL_SCRIPT_URL:-https://raw.githubusercontent.com/akinin/unifi-hotspot-app/main/install.sh}"
+REPO_URL="${REPO_URL:-https://github.com/akinin/unifi-hotspot-app.git}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run on the Proxmox VE host as root." >&2

@@ -18,7 +18,7 @@ UniFi hotspot-портал с авторизацией гостей по SMS и 
 Запустите на Proxmox VE host под `root`:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/akinin/wirenboard-sms/main/proxmox-install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/akinin/unifi-hotspot-app/main/proxmox-install.sh)"
 ```
 
 Установщик создаст Debian LXC контейнер и запустит `install.sh` внутри него.
@@ -75,7 +75,7 @@ apt install -y python3 python3-venv python3-pip git curl
 Склонируйте проект:
 
 ```bash
-git clone https://github.com/akinin/wirenboard-sms.git /opt/sms-gateway
+git clone https://github.com/akinin/unifi-hotspot-app.git /opt/sms-gateway
 cd /opt/sms-gateway
 ```
 

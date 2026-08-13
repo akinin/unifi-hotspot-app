@@ -3,7 +3,7 @@
 Запустите на Proxmox VE host под `root`:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/akinin/wirenboard-sms/main/proxmox-install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/akinin/unifi-hotspot-app/main/proxmox-install.sh)"
 ```
 
 Скрипт создает Debian LXC контейнер через `pct`, запускает его, устанавливает
