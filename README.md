@@ -212,6 +212,12 @@ systemctl restart sms-gateway sms-gateway-portal
 проекта - отдельный Wiren Board отправляет SMS, а LXC контейнер публикует
 запрос в MQTT.
 
+Для MQTT-режима на Wiren Board обязательно установите
+[`wirenboard/send_sms.js`](wirenboard/send_sms.js) в
+`/etc/wb-rules/send_sms.js`. Этот сценарий создаёт контрол
+`sms_sender/send` и передаёт полученную команду в `Notify.sendSMS()`. Без него
+публикация в MQTT не приведёт к отправке SMS.
+
 `SMS_BACKEND=mqtt` публикует запросы на отправку SMS в MQTT-топик Wiren Board:
 
 ```env

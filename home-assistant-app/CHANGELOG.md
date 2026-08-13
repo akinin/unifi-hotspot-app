@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3
+
+- Document the mandatory Wiren Board `send_sms.js` rule and include the script in the repository.
+
 ## 0.2.2
 
 - Fix the Home Assistant Ingress entry path so the administration interface opens without a double slash.

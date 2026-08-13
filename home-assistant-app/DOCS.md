@@ -19,6 +19,44 @@
 Не переключайте UniFi captive portal со старого LXC, пока не проверены отправка
 SMS, OTP, журнал и восстановление из резервной копии.
 
+## Обязательный скрипт на Wiren Board
+
+Для MQTT-режима на Wiren Board **обязательно** должен работать сценарий
+[`send_sms.js`](../wirenboard/send_sms.js). Без него приложение сможет
+подключиться к MQTT, но команда из топика
+`/devices/sms_sender/controls/send/on` не будет передана в `Notify.sendSMS()` и
+SMS не отправится.
+
+Установка на Wiren Board:
+
+1. Скопируйте `wirenboard/send_sms.js` в `/etc/wb-rules/send_sms.js`.
+2. Убедитесь, что SIM-карта и модем настроены в веб-интерфейсе Wiren Board и
+   штатная отправка SMS работает.
+3. Перезапустите движок правил:
+
+   ```bash
+   systemctl restart wb-rules
+   ```
+
+4. Проверьте создание виртуального устройства и отсутствие ошибок:
+
+   ```bash
+   systemctl status wb-rules --no-pager
+   journalctl -u wb-rules -n 100 --no-pager
+   ```
+
+5. Проверьте отправку тестовой команды через локальный MQTT:
+
+   ```bash
+   mosquitto_pub -h 127.0.0.1 \
+     -t /devices/sms_sender/controls/send/on \
+     -m '+79991234567;Тест SMS Gateway'
+   ```
+
+После успешной отправки в Wiren Board появится устройство **SMS Sender**, а в
+контроле **Результат последней отправки** — значение `Команда отправки передана`.
+Замените тестовый номер на собственный.
+
 ## Основные параметры
 
 - `api_token` — токен HTTP API. Передавайте его как `Bearer <token>`.
