@@ -1,7 +1,4 @@
 #!/usr/bin/with-contenv bashio
-if [[ "$(bashio::config 'sms_backend')" != "mmcli" ]]; then
-    exec sleep infinity
-fi
 while [[ ! -S /run/dbus/system_bus_socket ]]; do
     sleep 0.2
 done

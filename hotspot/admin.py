@@ -253,22 +253,48 @@ def legacy_admin_unifi(request: Request) -> RedirectResponse:
     return _redirect(lang=_lang(request))
 
 
-@router.get("/sms", response_class=HTMLResponse)
-async def admin_sms(
+@router.get("/sms")
+def legacy_admin_sms(request: Request) -> RedirectResponse:
+    return _redirect(lang=_lang(request), root="wb")
+
+
+@router.get("/wb", response_class=HTMLResponse)
+async def admin_wb(
     request: Request,
     settings: Settings = Depends(require_admin),
     store: Store = Depends(get_store),
 ) -> HTMLResponse:
+    return _sms_workspace(request, settings, store, "mqtt", "wb")
+
+
+@router.get("/usb", response_class=HTMLResponse)
+async def admin_usb(
+    request: Request,
+    settings: Settings = Depends(require_admin),
+    store: Store = Depends(get_store),
+) -> HTMLResponse:
+    return _sms_workspace(request, settings, store, "mmcli", "usb")
+
+
+def _sms_workspace(
+    request: Request,
+    settings: Settings,
+    store: Store,
+    backend: str,
+    active_tab: str,
+) -> HTMLResponse:
     lang = _lang(request)
-    message = request.query_params.get("message", "")
-    error = request.query_params.get("error", "")
+    transport_settings = settings.model_copy(update={"sms_backend": backend})
     return HTMLResponse(
         _layout(
-            "SMS Gateway",
-            _messages(message, error)
-            + _wb_overview(settings, lang)
+            "WB" if backend == "mqtt" else "USB",
+            _messages(
+                request.query_params.get("message", ""),
+                request.query_params.get("error", ""),
+            )
+            + _wb_overview(transport_settings, lang)
             + _sms_log_table(store.list_sms_log(), lang),
-            active_tab="sms",
+            active_tab=active_tab,
             lang=lang,
             sms_backend=settings.sms_backend,
         )
@@ -465,17 +491,23 @@ async def update_settings(
 def send_test_sms(
     phone: str = Form(...),
     message: str = Form(...),
+    backend: str = Form(...),
     lang: str = Form(default="en"),
     settings: Settings = Depends(require_admin),
 ):
+    if backend not in {"mqtt", "mmcli"}:
+        return _redirect(error="Unsupported SMS backend", lang=lang)
+    root = "wb" if backend == "mqtt" else "usb"
     try:
         message = message.strip()
         if not message:
             raise ValueError("message is empty")
-        SmsSender(settings).send(normalize_phone(phone), message)
+        SmsSender(settings.model_copy(update={"sms_backend": backend})).send(
+            normalize_phone(phone), message
+        )
     except Exception as exc:
-        return _redirect(error=f"SMS send failed: {exc}", lang=lang, root="sms")
-    return _redirect(message=_t(lang, "sms_sent"), lang=lang, root="sms")
+        return _redirect(error=f"SMS send failed: {exc}", lang=lang, root=root)
+    return _redirect(message=_t(lang, "sms_sent"), lang=lang, root=root)
 
 
 async def _safe_unifi_clients(settings: Settings) -> dict[str, dict[str, Any]]:
@@ -571,7 +603,7 @@ def _settings_form(settings: Settings, lang: str, active_tab: str) -> str:
 
 
 def _dashboard_cards(settings: Settings, lang: str, active_tab: str) -> str:
-    return f'<div class="dashboard-grid">{_settings_form(settings, lang, active_tab)}{_test_sms_form(lang)}</div>'
+    return f'<div class="dashboard-grid">{_settings_form(settings, lang, active_tab)}{_test_sms_form(lang, settings.sms_backend)}</div>'
 
 
 def _wb_overview(settings: Settings, lang: str) -> str:
@@ -595,7 +627,7 @@ def _wb_overview(settings: Settings, lang: str) -> str:
         """
     return f"""
     <div class="dashboard-grid wb-grid">
-      {_test_sms_form(lang)}
+      {_test_sms_form(lang, settings.sms_backend)}
       <div class="side-stack">
         <section class="ha-card connection-card compact-card">
           <div class="card-heading product-heading">
@@ -668,7 +700,7 @@ def _unifi_overview(settings: Settings, lang: str) -> str:
     """
 
 
-def _test_sms_form(lang: str) -> str:
+def _test_sms_form(lang: str, backend: str) -> str:
     return f"""
     <section class="ha-card sms-card">
       <div class="card-heading">
@@ -679,6 +711,7 @@ def _test_sms_form(lang: str) -> str:
       </div>
       <form class="test-sms card-content" method="post" action="test-sms">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
+        <input type="hidden" name="backend" value="{html.escape(backend)}">
         <label class="field"><span>{_t(lang, "phone")}</span><input id="sms-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+79991234567" required></label>
         <label class="field"><span>{_t(lang, "message")} <small id="message-counter">0 / 1000 {_t(lang, "characters")}</small></span><textarea id="sms-message" name="message" maxlength="1000" rows="3" required></textarea></label>
         <div class="card-actions"><button class="primary-button" type="submit">{_t(lang, "send")}</button></div>
@@ -939,16 +972,19 @@ def _tabs(lang: str, active_tab: str) -> str:
 
 
 def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
-    sms_active = "class='active'" if active_tab == "sms" else ""
+    wb_active = "class='active'" if active_tab == "wb" else ""
+    usb_active = "class='active'" if active_tab == "usb" else ""
     hotspot_active = "class='active'" if active_tab == "hotspot" else ""
-    sms_logo = "usb-logo" if sms_backend == "mmcli" else "wb-logo"
     return f"""
     <nav class="product-nav" aria-label="Products">
       <a href="./?lang={html.escape(lang)}" {hotspot_active}>
         <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>{_t(lang, 'hotspot')}</span>
       </a>
-      <a href="sms?lang={html.escape(lang)}" {sms_active}>
-        <span class="nav-mark sms-mark"><img src="{sms_logo}" alt=""></span><span>{_t(lang, 'sms_gateway')}</span>
+      <a href="wb?lang={html.escape(lang)}" {wb_active}>
+        <span class="nav-mark sms-mark"><img src="wb-logo" alt=""></span><span>WB</span>
+      </a>
+      <a href="usb?lang={html.escape(lang)}" {usb_active}>
+        <span class="nav-mark sms-mark"><img src="usb-logo" alt=""></span><span>USB</span>
       </a>
     </nav>
     """
@@ -990,7 +1026,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
           .language a.active {{ color: #fff; background: var(--primary); }}
           main {{ max-width: 1280px; margin: 0 auto; padding: 16px 16px 32px; }}
-          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 158px)); gap: 10px; }}
+          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 148px)); gap: 10px; }}
           .product-nav a {{ min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 15px; font-weight: 600; transition: border-color .15s, background .15s; }}
           .product-nav a:hover {{ border-color: var(--primary); }}
           .product-nav a.active {{ border-color: var(--primary); background: rgba(3,169,244,.09); color: var(--primary); }}
@@ -1116,6 +1152,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
           @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} .portal-settings {{ grid-template-columns: minmax(200px, 1fr) auto auto; }} }}
           @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .portal-settings {{ grid-template-columns: minmax(0, 1fr) auto; }} .portal-settings .field {{ grid-column: 1 / -1; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .product-nav a {{ min-height: 44px; font-size: 13px; }} }}
         </style>
       </head>
       <body>

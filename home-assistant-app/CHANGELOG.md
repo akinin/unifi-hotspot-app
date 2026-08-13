@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2
+
+- Replace the combined SMS Gateway tab with separate WB and USB tabs.
+- Route WB test messages explicitly through MQTT and USB test messages through ModemManager.
+- Keep ModemManager available alongside WB so either transport can be tested without changing the portal OTP default.
+
 ## 0.5.1
 
 - Start D-Bus and ModemManager only when the USB backend is selected.
