@@ -13,6 +13,7 @@ from hotspot.admin import (
     _settings_form,
     _sms_log_table,
     _tabs,
+    _unifi_overview,
     _wb_overview,
 )
 from hotspot.unifi import UniFiClient
@@ -74,6 +75,24 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'class="toast"' in page
     assert 'src="wb-logo"' in page
     assert 'href="unifi?lang=en"' in page
+    assert 'class="nav-mark unifi-mark"' in page
+    assert "#0559C9" in page
+
+
+def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
+    settings = Settings(
+        app_role="admin",
+        unifi_base_url="https://10.10.1.1",
+        unifi_api_key="secret-key",
+        unifi_dry_run=True,
+    )
+    page = _unifi_overview(settings, "en")
+
+    assert "https://10.10.1.1" in page
+    assert "Dry-run" in page
+    assert "API key" in page
+    assert "secret-key" not in page
+    assert 'src="unifi-logo"' in page
 
 
 def test_sms_store_records_delivery_history(tmp_path) -> None:
