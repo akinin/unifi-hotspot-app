@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.6
+
+- Merge the Portal and UniFi connection summaries into one compact card.
+- Match the designer sidebar height to the preview card and remove client/archive tabs from its header.
+- Serve the saved portal logo through an ingress-safe, non-cached preview route instead of a CSP-blocked data URL.
+
 ## 0.5.5
 
 - Move the portal preview from the main product navigation into the Hotspot section.
