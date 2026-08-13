@@ -14,8 +14,6 @@ ingress_port: 8089
 ingress_entry: /admin/
 panel_icon: mdi:message-text-outline
 panel_title: SMS Gateway
-panel_admin: true
-watchdog: http://[HOST]:8088/health
 ports:
   8088/tcp: 18088
   8880/tcp: 18880
