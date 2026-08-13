@@ -773,32 +773,20 @@ def _unifi_overview(settings: Settings, lang: str) -> str:
     mode_class = "warning" if settings.unifi_dry_run else "sent"
     return f"""
     <section class="ha-card hotspot-overview-card">
-      <div class="hotspot-overview-grid">
-        <div class="portal-overview-pane">
-          <div class="card-heading">
-            <span class="logo-preview"><img src="logo" alt="{_t(lang, 'logo')}"></span>
-            <div><h2>{_t(lang, 'portal')}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
-            <a class="secondary-button portal-edit-button" href="preview?lang={html.escape(lang)}">{_t(lang, 'preview')}</a>
-          </div>
-          <div class="portal-overview-meta card-content">
-            <span>{_t(lang, 'background')}</span><strong class="color-chip" style="--portal-color:{html.escape(settings.hotspot_background_color, quote=True)}">{html.escape(settings.hotspot_background_color)}</strong>
-            <span>{_t(lang, 'logo_size')}</span><strong>{settings.hotspot_logo_size}px</strong>
-          </div>
-        </div>
-        <div class="connection-overview-pane">
-          <div class="card-heading product-heading">
-            <span class="unifi-mark"><img src="unifi-logo" alt="UniFi"></span>
-            <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'unifi_connection_help')}</p></div>
-          </div>
-        <dl class="connection-list card-content">
-          <div><dt>{_t(lang, 'connection_mode')}</dt><dd><span class="badge {mode_class}">{_t(lang, mode_key)}</span></dd></div>
-          <div><dt>{_t(lang, 'base_url')}</dt><dd>{html.escape(settings.unifi_base_url or _t(lang, 'not_configured'))}</dd></div>
-          <div><dt>{_t(lang, 'site')}</dt><dd>{html.escape(settings.unifi_site)}</dd></div>
-          <div><dt>{_t(lang, 'auth_duration')}</dt><dd>{settings.unifi_auth_minutes} {_t(lang, 'minutes')}</dd></div>
-          <div><dt>{_t(lang, 'credentials')}</dt><dd>{credential}</dd></div>
-        </dl>
-        </div>
+      <div class="card-heading hotspot-overview-heading">
+        <span class="logo-preview"><img src="logo" alt="{_t(lang, 'logo')}"></span>
+        <div><h2>{_t(lang, 'portal')}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
+        <span class="badge {mode_class} overview-mode">{_t(lang, mode_key)}</span>
+        <a class="secondary-button portal-edit-button" href="preview?lang={html.escape(lang)}">{_t(lang, 'preview')}</a>
       </div>
+      <dl class="hotspot-overview-details card-content">
+        <div><dt>{_t(lang, 'background')}</dt><dd><strong class="color-chip" style="--portal-color:{html.escape(settings.hotspot_background_color, quote=True)}">{html.escape(settings.hotspot_background_color)}</strong></dd></div>
+        <div><dt>{_t(lang, 'logo_size')}</dt><dd><strong>{settings.hotspot_logo_size}px</strong></dd></div>
+        <div><dt>{_t(lang, 'base_url')}</dt><dd>{html.escape(settings.unifi_base_url or _t(lang, 'not_configured'))}</dd></div>
+        <div><dt>{_t(lang, 'site')}</dt><dd>{html.escape(settings.unifi_site)}</dd></div>
+        <div><dt>{_t(lang, 'auth_duration')}</dt><dd>{settings.unifi_auth_minutes} {_t(lang, 'minutes')}</dd></div>
+        <div><dt>{_t(lang, 'credentials')}</dt><dd>{credential}</dd></div>
+      </dl>
     </section>
     """
 
@@ -1136,7 +1124,7 @@ def _portal_preview(settings: Settings, lang: str) -> str:
         </div>
         <div class="preview-stage">
           <div class="preview-device" style="--preview-width: 390px">
-            <iframe id="hotspot-preview" src="preview/content?lang={html.escape(lang)}&amp;logo_size={logo_size}" title="{_t(lang, 'preview_title')}" sandbox="allow-scripts"></iframe>
+            <iframe id="hotspot-preview" src="preview/content?lang={html.escape(lang)}&amp;logo_size={logo_size}" title="{_t(lang, 'preview_title')}" sandbox="allow-scripts allow-same-origin"></iframe>
           </div>
         </div>
       </section>
@@ -1199,11 +1187,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .side-stack .ha-card {{ margin: 0; }}
           .unifi-grid .ha-card {{ height: 100%; }}
           .portal-edit-button {{ margin-left: auto; }}
-          .hotspot-overview-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(390px, .75fr); }}
-          .portal-overview-pane {{ min-width: 0; border-right: 1px solid var(--divider); }}
-          .connection-overview-pane {{ min-width: 0; }}
-          .portal-overview-meta {{ display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 8px 12px; color: var(--muted); }}
-          .portal-overview-meta strong {{ color: var(--text); }}
+          .hotspot-overview-card {{ height: auto; }}
+          .hotspot-overview-heading {{ padding-bottom: 10px; }}
+          .hotspot-overview-heading .overview-mode {{ margin-left: auto; }}
+          .hotspot-overview-details {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; padding-top: 0; }}
+          .hotspot-overview-details > div {{ min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--divider); }}
+          .hotspot-overview-details dt {{ color: var(--muted); white-space: nowrap; }}
+          .hotspot-overview-details dd {{ min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }}
           .color-chip::before {{ content: ""; width: 18px; height: 18px; display: inline-block; margin-right: 7px; vertical-align: middle; border: 1px solid var(--divider); border-radius: 5px; background: var(--portal-color); }}
           .preview-workspace {{ display: grid; grid-template-columns: minmax(260px, 310px) minmax(0, 1fr); gap: 12px; align-items: stretch; }}
           .preview-workspace .ha-card {{ margin-bottom: 0; }}
@@ -1329,8 +1319,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 900px) {{ .dashboard-grid, .preview-workspace, .hotspot-overview-grid {{ grid-template-columns: 1fr; }} .portal-overview-pane {{ border-right: 0; border-bottom: 1px solid var(--divider); }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
+          @media (max-width: 900px) {{ .dashboard-grid, .preview-workspace {{ grid-template-columns: 1fr; }} .hotspot-overview-details {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .hotspot-overview-details {{ grid-template-columns: 1fr; }} .hotspot-overview-heading {{ flex-wrap: wrap; }} .hotspot-overview-heading .overview-mode {{ margin-left: 0; }} .portal-edit-button {{ margin-left: auto; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
         </style>
       </head>
       <body>

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.7
+
+- Allow the trusted preview iframe to load its same-origin saved logo through Home Assistant ingress.
+- Replace the stretching two-pane Hotspot summary with one compact six-field card.
+
 ## 0.5.6
 
 - Merge the Portal and UniFi connection summaries into one compact card.
