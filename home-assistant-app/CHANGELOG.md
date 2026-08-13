@@ -6,6 +6,7 @@
 - Compact the dashboard and stack related cards to remove empty layout gaps.
 - Add a UniFi connection summary with mode, controller, site, access duration, and credential state.
 - Record confirmed WB delivery results from every source, including `wirenboard-discovery`, without duplicate journal rows.
+- Add a protected UniFi Hotspot API for portal settings, active clients, archive, extension, revocation, and blocking.
 
 ## 0.4.0
 

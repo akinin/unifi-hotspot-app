@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from api.config import Settings
 from api.deps import require_api_token
 from api.sms_monitor import WBSmsMonitor
+from api.store import Store
 from hotspot.admin import (
     _active_table,
     _archive_table,
@@ -18,6 +19,18 @@ from hotspot.admin import (
     _unifi_overview,
     _wb_overview,
 )
+from hotspot.api import (
+    ExtendRequest,
+    PortalUpdate,
+    active_clients,
+    archive,
+    block_client,
+    extend_client,
+    portal,
+    revoke_client,
+    update_portal,
+)
+from hotspot.store import HotspotStore
 from hotspot.unifi import UniFiClient
 
 
@@ -111,8 +124,6 @@ def test_sms_store_records_delivery_history(tmp_path) -> None:
 
 
 def test_wb_monitor_records_and_deduplicates_confirmed_sms(tmp_path) -> None:
-    from api.store import Store
-
     store = Store(str(tmp_path / "sms.sqlite3"))
     monitor = WBSmsMonitor(
         Settings(wb_sms_topic="/devices/sms_sender/controls/send/on"),
@@ -139,3 +150,55 @@ def test_wb_monitor_records_and_deduplicates_confirmed_sms(tmp_path) -> None:
         monitor.handle_value(field, value)
     time.sleep(0.35)
     assert len(store.list_sms_log()) == 1
+
+
+def test_unifi_api_manages_portal_clients_and_archive(tmp_path) -> None:
+    settings_file = tmp_path / "settings.env"
+    settings = Settings(
+        unifi_dry_run=True,
+        settings_file_path=str(settings_file),
+        hotspot_portal_title="Welcome",
+    )
+    store = Store(str(tmp_path / "hotspot.sqlite3"))
+    hotspot_store = HotspotStore(store)
+    hotspot_store.save_session(
+        "00:11:22:33:44:55",
+        "+79990000000",
+        None,
+        None,
+    )
+    hotspot_store.mark_authorized("00:11:22:33:44:55", 60)
+
+    assert portal(settings=settings)["title"] == "Welcome"
+    assert update_portal(PortalUpdate(title="Guest Wi-Fi"), settings=settings)["ok"]
+    assert "HOTSPOT_PORTAL_TITLE=Guest Wi-Fi" in settings_file.read_text()
+
+    clients = asyncio.run(active_clients(settings=settings, store=store))
+    assert clients["count"] == 1
+    assert clients["clients"][0]["mac"] == "00:11:22:33:44:55"
+
+    extended = asyncio.run(
+        extend_client(
+            "00:11:22:33:44:55",
+            ExtendRequest(days=2),
+            settings=settings,
+            store=store,
+        )
+    )
+    assert extended["ok"]
+    assert archive(store=store)["count"] == 2
+
+    assert asyncio.run(
+        revoke_client("00:11:22:33:44:55", settings=settings, store=store)
+    )["ok"]
+
+    hotspot_store.save_session(
+        "00:11:22:33:44:66",
+        "+79990000001",
+        None,
+        None,
+    )
+    hotspot_store.mark_authorized("00:11:22:33:44:66", 60)
+    assert asyncio.run(
+        block_client("00:11:22:33:44:66", settings=settings, store=store)
+    )["ok"]
