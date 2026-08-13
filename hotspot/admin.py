@@ -832,21 +832,14 @@ def _unifi_overview(settings: Settings, lang: str, active_count: int = 0) -> str
     tls_key = "enabled" if settings.unifi_verify_tls else "disabled"
     return f"""
     <section class="ha-card hotspot-overview-card">
-      <div class="card-heading hotspot-overview-heading">
-        <div><h2>{_t(lang, 'portal')}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
-      </div>
       <div class="hotspot-overview-groups">
-        <section class="overview-group">
-          <div class="overview-group-heading overview-preview-heading">
+        <section class="overview-group preview-only-group">
+          <div class="overview-preview-heading">
             <a class="secondary-button portal-preview-button" href="preview?lang={html.escape(lang)}">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c5.5 0 9.5 5.3 9.5 7s-4 7-9.5 7S2.5 13.7 2.5 12 6.5 5 12 5Zm0 2c-4.1 0-7.2 3.7-7.5 5 .3 1.3 3.4 5 7.5 5s7.2-3.7 7.5-5c-.3-1.3-3.4-5-7.5-5Zm0 2.25A2.75 2.75 0 1 1 12 14.75 2.75 2.75 0 0 1 12 9.25Z"/></svg>
               <span>{_t(lang, 'preview')}</span>
             </a>
           </div>
-          <dl class="overview-group-list">
-            <div><dt>{_t(lang, 'background')}</dt><dd><strong class="color-chip" style="--portal-color:{html.escape(settings.hotspot_background_color, quote=True)}">{html.escape(settings.hotspot_background_color)}</strong></dd></div>
-            <div><dt>{_t(lang, 'logo_size')}</dt><dd><strong>{settings.hotspot_logo_size}px</strong></dd></div>
-          </dl>
         </section>
         <section class="overview-group">
           <div class="overview-group-heading"><span class="overview-group-icon"><svg viewBox="0 0 24 24"><path d="M3.9 12a5 5 0 0 1 5-5h3v2h-3a3 3 0 1 0 0 6h3v2h-3a5 5 0 0 1-5-5Zm5-1h6v2h-6v-2Zm6.2-4h-3V5h3a7 7 0 1 1 0 14h-3v-2h3a5 5 0 1 0 0-10Z"/></svg></span><h3>{_t(lang, 'connection')}</h3><span class="badge {mode_class}">{_t(lang, mode_key)}</span></div>
@@ -1279,7 +1272,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .script-inline-heading p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
           .connection-script-content pre {{ max-height: 360px; margin: 0; overflow: auto; padding: 16px 18px; border-top: 1px solid var(--divider); background: #111820; color: #e6edf3; font-size: 12px; line-height: 1.55; white-space: pre; }}
           .unifi-grid .ha-card {{ height: 100%; }}
-          .overview-preview-heading {{ justify-content: flex-end; }}
+          .preview-only-group {{ display: grid; place-items: center; padding: 12px; }}
+          .overview-preview-heading {{ display: flex; justify-content: center; width: 100%; }}
           .portal-preview-button {{ min-height: 32px; gap: 7px; padding: 5px 10px; }}
           .portal-preview-button svg {{ width: 17px; height: 17px; fill: currentColor; }}
           .hotspot-overview-card {{ height: auto; }}

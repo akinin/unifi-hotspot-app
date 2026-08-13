@@ -174,6 +174,9 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "<h3>Appearance</h3>" not in page
     assert 'class="secondary-button portal-preview-button"' in page
     assert page.count('href="preview?lang=en"') == 1
+    assert "#10141b" not in page
+    assert "132px" not in page
+    assert "Welcome to Olshaniki</p>" not in page
     assert 'action="settings/access-days"' in page
     assert 'value="1"' in page
     assert "Active guests</dt><dd>3" in page
