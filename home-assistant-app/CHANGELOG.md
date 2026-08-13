@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.9
+
+- Убран дублирующий логотип из карточки портала: бренд остаётся в шапке и навигации.
+
 ## 0.5.8
 
 - Merge the required WB script into the connection card behind a top-right Script action.
