@@ -1,5 +1,5 @@
 name: UniFi Hotspot
-version: "0.5.9"
+version: "0.6.0"
 slug: wirenboard_sms
 description: UniFi guest portal with an integrated WB or USB SMS gateway
 url: https://github.com/akinin/wirenboard-sms/tree/main/home-assistant-app
@@ -21,59 +21,75 @@ ports_description:
   8088/tcp: SMS API (test port by default)
   8880/tcp: UniFi hotspot portal (test port by default)
 options:
-  api_token: ""
-  app_secret: ""
-  sms_backend: mqtt
-  mmcli_modem_id: any
-  wb_mqtt_host: 10.10.100.5
-  wb_mqtt_port: 1884
-  wb_mqtt_username: ""
-  wb_mqtt_password: ""
-  wb_sms_topic: /devices/sms_sender/controls/send/on
-  unifi_dry_run: true
-  unifi_base_url: https://10.10.1.1
-  unifi_api_key: ""
-  unifi_username: ""
-  unifi_password: ""
-  unifi_site: default
-  unifi_verify_tls: false
-  unifi_auth_minutes: 1440
-  hotspot_portal_title: Welcome to Olshaniki
-  hotspot_background_color: "#10141b"
-  hotspot_logo_size: 132
-  telegram_bot_token: ""
-  telegram_chat_id: ""
-  otp_ttl_seconds: 300
-  otp_length: 6
-  otp_resend_seconds: 60
-  otp_max_attempts: 5
+  security:
+    api_token: ""
+    app_secret: ""
+  sms:
+    backend: mqtt
+  wirenboard:
+    mqtt_host: 10.10.100.5
+    mqtt_port: 1884
+    mqtt_username: ""
+    mqtt_password: ""
+    sms_topic: /devices/sms_sender/controls/send/on
+  usb:
+    modem_id: any
+  unifi:
+    dry_run: true
+    base_url: https://10.10.1.1
+    api_key: ""
+    username: ""
+    password: ""
+    site: default
+    verify_tls: false
+    auth_minutes: 1440
+  portal:
+    title: Welcome to Olshaniki
+    background_color: "#10141b"
+    logo_size: 132
+  telegram:
+    bot_token: ""
+    chat_id: ""
+  otp:
+    ttl_seconds: 300
+    length: 6
+    resend_seconds: 60
+    max_attempts: 5
 schema:
-  api_token: password
-  app_secret: password
-  sms_backend: str
-  mmcli_modem_id: str
-  wb_mqtt_host: str
-  wb_mqtt_port: port
-  wb_mqtt_username: str?
-  wb_mqtt_password: password
-  wb_sms_topic: str
-  unifi_dry_run: bool
-  unifi_base_url: url?
-  unifi_api_key: password
-  unifi_username: str?
-  unifi_password: password
-  unifi_site: str
-  unifi_verify_tls: bool
-  unifi_auth_minutes: int(1,525600)
-  hotspot_portal_title: str
-  hotspot_background_color: str
-  hotspot_logo_size: int(64,240)
-  telegram_bot_token: password
-  telegram_chat_id: str?
-  otp_ttl_seconds: int(60,3600)
-  otp_length: int(4,10)
-  otp_resend_seconds: int(10,3600)
-  otp_max_attempts: int(1,20)
+  security:
+    api_token: password
+    app_secret: password
+  sms:
+    backend: list(mqtt|mmcli)
+  wirenboard:
+    mqtt_host: str
+    mqtt_port: port
+    mqtt_username: str?
+    mqtt_password: password
+    sms_topic: str
+  usb:
+    modem_id: str
+  unifi:
+    dry_run: bool
+    base_url: url?
+    api_key: password
+    username: str?
+    password: password
+    site: str
+    verify_tls: bool
+    auth_minutes: int(1,525600)
+  portal:
+    title: str
+    background_color: str
+    logo_size: int(64,240)
+  telegram:
+    bot_token: password
+    chat_id: str?
+  otp:
+    ttl_seconds: int(60,3600)
+    length: int(4,10)
+    resend_seconds: int(10,3600)
+    max_attempts: int(1,20)
 image: ghcr.io/akinin/wirenboard-sms-app
 usb: true
 udev: true

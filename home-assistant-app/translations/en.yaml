@@ -1,61 +1,96 @@
 configuration:
-  sms_backend:
+  security:
+    name: Security and API
+    description: Application tokens. The OTP secret can be generated automatically.
+    fields:
+      api_token:
+        name: HTTP API token
+        description: Bearer token for protected API methods. Keep it private.
+      app_secret:
+        name: OTP secret
+        description: Leave empty to generate and persist a strong secret automatically.
+  sms:
     name: SMS transport
-    description: mqtt for Wiren Board, mmcli for a USB modem through ModemManager.
-  mmcli_modem_id:
-    name: USB modem ID
-    description: Keep any for automatic selection.
-  api_token:
-    name: API token
-    description: Required bearer token for protected HTTP API methods.
-  app_secret:
-    name: OTP secret
-    description: Leave empty to generate and persist a random secret automatically.
-  wb_mqtt_host:
-    name: MQTT host
-  wb_mqtt_port:
-    name: MQTT port
-  wb_mqtt_username:
-    name: MQTT username
-  wb_mqtt_password:
-    name: MQTT password
-  wb_sms_topic:
-    name: SMS command topic
-  unifi_dry_run:
-    name: UniFi dry-run
-    description: Prevent all client authorization, revocation, and blocking changes.
-  unifi_base_url:
-    name: UniFi URL
-  unifi_api_key:
-    name: UniFi API key
-  unifi_username:
-    name: UniFi local username
-  unifi_password:
-    name: UniFi local password
-  unifi_site:
-    name: UniFi site
-  unifi_verify_tls:
-    name: Verify UniFi TLS certificate
-  unifi_auth_minutes:
-    name: Guest access duration
-  hotspot_portal_title:
-    name: Portal title
-  hotspot_background_color:
-    name: Portal background color
-  hotspot_logo_size:
-    name: Portal logo size
-  telegram_bot_token:
-    name: Telegram bot token
-  telegram_chat_id:
-    name: Telegram chat ID
-  otp_ttl_seconds:
-    name: OTP lifetime
-  otp_length:
-    name: OTP length
-  otp_resend_seconds:
-    name: OTP resend delay
-  otp_max_attempts:
-    name: Maximum OTP attempts
+    description: Select the default transport for the portal, OTP and HTTP API.
+    fields:
+      backend:
+        name: Default transport
+        description: mqtt for Wiren Board; mmcli for a USB modem through ModemManager.
+  wirenboard:
+    name: Wiren Board
+    description: Protected MQTT connection and the topic provided by send_sms.js.
+    fields:
+      mqtt_host:
+        name: MQTT host
+      mqtt_port:
+        name: MQTT port
+      mqtt_username:
+        name: MQTT username
+      mqtt_password:
+        name: MQTT password
+      sms_topic:
+        name: SMS command topic
+  usb:
+    name: USB modem
+    description: Used only when mmcli is selected as the transport.
+    fields:
+      modem_id:
+        name: Modem ID
+        description: Keep any to select the first available modem automatically.
+  unifi:
+    name: UniFi Network
+    description: Controller connection and guest access lifetime.
+    fields:
+      dry_run:
+        name: Dry-run mode
+        description: Prevents client authorization, revocation and blocking changes.
+      base_url:
+        name: Controller URL
+      api_key:
+        name: API key
+        description: Preferred authentication method.
+      username:
+        name: Local username
+        description: Use only when an API key is not configured.
+      password:
+        name: Local password
+      site:
+        name: Site
+      verify_tls:
+        name: Verify TLS certificate
+      auth_minutes:
+        name: Guest access, minutes
+        description: The application web UI also lets you edit this value in days.
+  portal:
+    name: Portal appearance
+    description: Basic appearance. Logo upload and preview are available in the web UI.
+    fields:
+      title:
+        name: Welcome text
+      background_color:
+        name: Background color
+      logo_size:
+        name: Logo size, px
+  telegram:
+    name: Telegram
+    description: Optional operational notifications from the application.
+    fields:
+      bot_token:
+        name: Bot token
+      chat_id:
+        name: Chat ID
+  otp:
+    name: One-time codes
+    description: Code lifetime, length and retry protection.
+    fields:
+      ttl_seconds:
+        name: Lifetime, seconds
+      length:
+        name: Code length
+      resend_seconds:
+        name: Resend delay, seconds
+      max_attempts:
+        name: Maximum attempts
 network:
   8088/tcp: SMS API
-  8880/tcp: UniFi hotspot portal
+  8880/tcp: UniFi guest portal
