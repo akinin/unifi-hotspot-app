@@ -859,7 +859,7 @@ def _unifi_overview(settings: Settings, lang: str, active_count: int = 0) -> str
           <form class="duration-editor" method="post" action="settings/access-days">
             <input type="hidden" name="lang" value="{html.escape(lang)}">
             <label for="access-days">{_t(lang, 'auth_duration')}</label>
-            <div><input id="access-days" name="days" type="number" min="1" max="365" value="{auth_days}"><span>{_t(lang, 'days')}</span><button class="icon-save" type="submit" title="{_t(lang, 'save')}" aria-label="{_t(lang, 'save')}">✓</button></div>
+            <div><input id="access-days" name="days" type="number" min="1" max="365" value="{auth_days}"><span>{_t(lang, 'days')}</span><button class="primary-button duration-save" type="submit">{_t(lang, 'save')}</button></div>
           </form>
         </section>
       </div>
@@ -1293,7 +1293,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .duration-editor > div {{ display: flex; align-items: center; gap: 7px; }}
           .duration-editor input {{ width: 70px; min-height: 32px; padding: 4px 8px; text-align: right; }}
           .duration-editor span {{ color: var(--muted); }}
-          .duration-editor .icon-save {{ width: 32px; min-height: 32px; margin-left: auto; padding: 0; color: #fff; background: var(--primary); }}
+          .duration-editor .duration-save {{ min-height: 32px; margin-left: auto; padding: 0 12px; }}
           .color-chip::before {{ content: ""; width: 18px; height: 18px; display: inline-block; margin-right: 7px; vertical-align: middle; border: 1px solid var(--divider); border-radius: 5px; background: var(--portal-color); }}
           .preview-workspace {{ display: grid; grid-template-columns: minmax(260px, 310px) minmax(0, 1fr); gap: 12px; align-items: stretch; }}
           .preview-workspace .ha-card {{ margin-bottom: 0; }}
