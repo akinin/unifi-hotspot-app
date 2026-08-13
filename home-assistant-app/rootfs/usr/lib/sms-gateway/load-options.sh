@@ -15,7 +15,7 @@ export UNIFI_USERNAME="$(bashio::config 'unifi_username')"
 export UNIFI_PASSWORD="$(bashio::config 'unifi_password')"
 export UNIFI_SITE="$(bashio::config 'unifi_site')"
 export UNIFI_VERIFY_TLS="$(bashio::config 'unifi_verify_tls')"
-export UNIFI_AUTH_MINUTES="$(bashio::config 'unifi_auth_minutes')"
+configured_auth_minutes="$(bashio::config 'unifi_auth_minutes')"
 configured_portal_title="$(bashio::config 'hotspot_portal_title')"
 configured_background_color="$(bashio::config 'hotspot_background_color')"
 configured_logo_size="$(bashio::config 'hotspot_logo_size')"
@@ -32,8 +32,10 @@ export SETTINGS_FILE_PATH=/data/runtime.env
 export HOTSPOT_ACCESS_LOG_PATH=/data/hotspot_access.csv
 if [[ ! -e "${SETTINGS_FILE_PATH}" ]]; then
     safe_portal_title="${configured_portal_title//$'\n'/ }"
-    printf 'HOTSPOT_PORTAL_TITLE=%s\nHOTSPOT_BACKGROUND_COLOR=%s\nHOTSPOT_LOGO_SIZE=%s\nHOTSPOT_LOGO_PATH=/data/hotspot_logo.png\n' \
-        "${safe_portal_title//$'\r'/ }" "${configured_background_color}" "${configured_logo_size}" > "${SETTINGS_FILE_PATH}"
+    printf 'HOTSPOT_PORTAL_TITLE=%s\nHOTSPOT_BACKGROUND_COLOR=%s\nHOTSPOT_LOGO_SIZE=%s\nHOTSPOT_LOGO_PATH=/data/hotspot_logo.png\nUNIFI_AUTH_MINUTES=%s\n' \
+        "${safe_portal_title//$'\r'/ }" "${configured_background_color}" "${configured_logo_size}" "${configured_auth_minutes}" > "${SETTINGS_FILE_PATH}"
+elif ! grep -q '^UNIFI_AUTH_MINUTES=' "${SETTINGS_FILE_PATH}"; then
+    printf 'UNIFI_AUTH_MINUTES=%s\n' "${configured_auth_minutes}" >> "${SETTINGS_FILE_PATH}"
 fi
 
 configured_secret="$(bashio::config 'app_secret')"

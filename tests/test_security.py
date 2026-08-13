@@ -19,6 +19,7 @@ from hotspot.admin import (
     _tabs,
     _unifi_overview,
     _wb_overview,
+    update_access_days,
     update_settings,
 )
 from hotspot.api import (
@@ -90,7 +91,7 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'href="./?lang=en"' in page
     assert 'href="wb?lang=en"' in page
     assert 'href="usb?lang=en"' in page
-    assert 'href="preview?lang=en"' in _tabs("en", "preview")
+    assert 'href="preview?lang=en"' not in _tabs("en", "active")
     assert 'name="backend" value="mqtt"' in page
     assert 'class="nav-mark unifi-mark"' in page
     assert "#0559C9" in page
@@ -108,7 +109,7 @@ def test_hotspot_preview_is_responsive_and_safe() -> None:
     assert 'name="title"' in workspace
     assert 'name="background"' in workspace
     assert 'name="logo_size"' in workspace
-    assert "class='active'" in _tabs("ru", "preview")
+    assert 'href="preview?lang=ru"' not in _tabs("ru", "active")
     assert 'src="content/logo?v=' in content
     assert "autofocus" not in content
     assert "Wi-Fi вход" in content
@@ -150,7 +151,7 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
         unifi_api_key="secret-key",
         unifi_dry_run=True,
     )
-    page = _unifi_overview(settings, "en")
+    page = _unifi_overview(settings, "en", active_count=3)
 
     assert "https://10.10.1.1" in page
     assert "Dry-run" in page
@@ -158,8 +159,25 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "secret-key" not in page
     assert 'src="logo"' in page
     assert page.count('class="ha-card hotspot-overview-card"') == 1
-    assert 'class="hotspot-overview-details card-content"' in page
+    assert 'class="hotspot-overview-groups"' in page
+    assert page.count('class="overview-group') >= 3
     assert "hotspot-overview-grid" not in page
+    assert 'action="settings/access-days"' in page
+    assert 'value="1"' in page
+    assert "Active guests</dt><dd>3" in page
+    assert "WB / MQTT" in page
+    assert "TLS check</dt><dd>Disabled" in page
+
+
+def test_access_duration_is_saved_in_days(tmp_path) -> None:
+    settings_file = tmp_path / "runtime.env"
+    settings_file.write_text("UNIFI_AUTH_MINUTES=1440\n", encoding="utf-8")
+    settings = Settings(app_role="admin", settings_file_path=str(settings_file))
+
+    response = update_access_days(days=7, lang="en", settings=settings)
+
+    assert "UNIFI_AUTH_MINUTES=10080" in settings_file.read_text(encoding="utf-8")
+    assert "Guest%20access%20duration%20updated" in response.headers["location"]
 
 
 def test_preview_iframe_allows_same_origin_assets() -> None:
@@ -170,9 +188,16 @@ def test_preview_iframe_allows_same_origin_assets() -> None:
 
 def test_usb_backend_uses_supplied_usb_branding() -> None:
     settings = Settings(app_role="admin", sms_backend="mmcli", mmcli_modem_id="any")
+    modem = {
+        "id": "0",
+        "model": "Quectel EC25",
+        "operator": "MegaFon",
+        "registration": "home",
+        "signal": "76%",
+    }
     page = _layout(
         "USB",
-        _wb_overview(settings, "en"),
+        _wb_overview(settings, "en", modem_status=modem),
         "usb",
         "en",
         settings.sms_backend,
@@ -180,9 +205,23 @@ def test_usb_backend_uses_supplied_usb_branding() -> None:
 
     assert 'src="usb-logo"' in page
     assert "USB / ModemManager" in page
-    assert "MMCLI" in page
+    assert "Quectel EC25" in page
+    assert "MegaFon" in page
+    assert "76%" in page
     assert "Required WB script" not in page
+    assert page.count('class="ha-card connection-card compact-card connection-card-with-action"') == 1
     assert 'name="backend" value="mmcli"' in page
+
+
+def test_wb_script_is_integrated_into_connection_card() -> None:
+    page = _wb_overview(Settings(app_role="admin", sms_backend="mqtt"), "en")
+
+    assert page.count('class="ha-card connection-card compact-card connection-card-with-action"') == 1
+    assert 'class="connection-script"' in page
+    assert "Required WB script" in page
+    assert 'href="send_sms.js"' in page
+    assert "/etc/wb-rules/send_sms.js" in page
+    assert "MQTT authorization" in page
 
 
 def test_active_clients_use_compact_action_popover() -> None:

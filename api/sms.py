@@ -136,3 +136,42 @@ class SmsSender:
         if not match:
             raise RuntimeError(f"Cannot find modem in mmcli output: {list_result.stdout}")
         return match.group(1)
+
+    def modem_status(self) -> dict[str, str]:
+        """Return a small, safe ModemManager status summary for the admin UI."""
+        result = {
+            "id": self.settings.mmcli_modem_id or "any",
+            "model": "",
+            "operator": "",
+            "registration": "",
+            "signal": "",
+            "error": "",
+        }
+        try:
+            modem_id = self._resolve_mmcli_modem_id()
+            result["id"] = modem_id
+            status = subprocess.run(
+                ["mmcli", "-m", modem_id, "--output-keyvalue"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if status.returncode != 0:
+                result["error"] = status.stderr.strip() or status.stdout.strip()
+                return result
+            values: dict[str, str] = {}
+            for line in status.stdout.splitlines():
+                key, separator, value = line.partition(":")
+                if separator:
+                    values[key.strip()] = value.strip().strip("'")
+            manufacturer = values.get("modem.generic.manufacturer", "")
+            model = values.get("modem.generic.model", "")
+            result["model"] = " ".join(part for part in (manufacturer, model) if part)
+            result["operator"] = values.get("modem.3gpp.operator-name", "")
+            result["registration"] = values.get("modem.3gpp.registration-state", "")
+            signal = values.get("modem.generic.signal-quality.value", "")
+            result["signal"] = f"{signal}%" if signal and not signal.endswith("%") else signal
+        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
+            result["error"] = str(exc)
+        return result
