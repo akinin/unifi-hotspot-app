@@ -42,3 +42,8 @@ def test_brand_assets_are_included() -> None:
     assert hashlib.sha256(unifi).hexdigest() == (
         "b0588853cf91a58aa0dfdeaf724b6d4fae6a0202cfe523ba08a17bd7b89c6f53"
     )
+    usb = Path("hotspot/assets/usb.png").read_bytes()
+    assert usb.startswith(b"\x89PNG\r\n\x1a\n")
+    assert hashlib.sha256(usb).hexdigest() == (
+        "c4af073cdc0903e532298d37a22315ba7908970553bf044f642615223276c7bd"
+    )

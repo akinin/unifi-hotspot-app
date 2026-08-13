@@ -1,4 +1,10 @@
 configuration:
+  sms_backend:
+    name: Канал отправки SMS
+    description: mqtt — Wiren Board, mmcli — USB-модем через ModemManager.
+  mmcli_modem_id:
+    name: ID USB-модема
+    description: Оставьте any для автоматического выбора.
   api_token:
     name: Токен API
     description: Обязательный Bearer-токен для защищённых методов HTTP API.

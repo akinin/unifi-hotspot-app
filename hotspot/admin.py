@@ -22,9 +22,9 @@ from .unifi import UniFiClient, UniFiClientNotFoundError
 
 router = APIRouter(prefix="/admin")
 ADMIN_ROOT = "./"
-LOGO_PATH = Path(__file__).with_name("assets") / "ahs.png"
 WB_LOGO_PATH = Path(__file__).with_name("assets") / "wb.svg"
 UNIFI_LOGO_PATH = Path(__file__).with_name("assets") / "unifi.png"
+USB_LOGO_PATH = Path(__file__).with_name("assets") / "usb.png"
 WB_SCRIPT_PATH = Path(__file__).parent.parent / "wirenboard" / "send_sms.js"
 
 TEXT = {
@@ -64,7 +64,7 @@ TEXT = {
         "sms_sent": "Test SMS sent",
         "subtitle": "Wiren Board SMS and guest access",
         "portal_help": "Configure the welcome screen shown to Wi-Fi guests.",
-        "sms_help": "Send a diagnostic message through the configured Wiren Board.",
+        "sms_help": "Send a diagnostic message through the selected SMS transport.",
         "active_help": "Manage authorized guests and their access time.",
         "archive_help": "Review previous guest authorizations and export the history.",
         "change_logo": "Click the logo to replace it",
@@ -116,6 +116,10 @@ TEXT = {
         "unifi_connection_help": "Current controller connection settings.",
         "client_actions": "Client actions",
         "open_actions": "Manage",
+        "hotspot": "Hotspot",
+        "sms_gateway": "SMS Gateway",
+        "usb_modem": "USB modem",
+        "usb_help": "ModemManager sends SMS directly through the selected USB modem.",
     },
     "ru": {
         "active": "Активные",
@@ -153,7 +157,7 @@ TEXT = {
         "sms_sent": "Тестовая SMS отправлена",
         "subtitle": "SMS через Wiren Board и гостевой доступ",
         "portal_help": "Настройте экран приветствия, который увидят гости Wi-Fi.",
-        "sms_help": "Отправьте диагностическое сообщение через настроенный Wiren Board.",
+        "sms_help": "Отправьте диагностическое сообщение через выбранный канал SMS.",
         "active_help": "Управляйте авторизованными гостями и сроком их доступа.",
         "archive_help": "Просматривайте историю авторизаций и выгружайте её в CSV.",
         "change_logo": "Нажмите на логотип, чтобы заменить его",
@@ -205,6 +209,10 @@ TEXT = {
         "unifi_connection_help": "Текущие параметры подключения к контроллеру.",
         "client_actions": "Действия с клиентом",
         "open_actions": "Управлять",
+        "hotspot": "Hotspot",
+        "sms_gateway": "SMS Gateway",
+        "usb_modem": "USB-модем",
+        "usb_help": "ModemManager отправляет SMS напрямую через выбранный USB-модем.",
     },
 }
 
@@ -222,27 +230,6 @@ async def admin_home(
     store: Store = Depends(get_store),
 ) -> HTMLResponse:
     lang = _lang(request)
-    message = request.query_params.get("message", "")
-    error = request.query_params.get("error", "")
-    return HTMLResponse(
-        _layout(
-            "Wiren Board",
-            _messages(message, error)
-            + _wb_overview(settings, lang)
-            + _sms_log_table(store.list_sms_log(), lang),
-            active_tab="wb",
-            lang=lang,
-        )
-    )
-
-
-@router.get("/unifi", response_class=HTMLResponse)
-async def admin_unifi(
-    request: Request,
-    settings: Settings = Depends(require_admin),
-    store: Store = Depends(get_store),
-) -> HTMLResponse:
-    lang = _lang(request)
     hotspot_store = HotspotStore(store)
     sessions = hotspot_store.list_active_sessions()
     unifi_clients = await _safe_unifi_clients(settings)
@@ -254,8 +241,36 @@ async def admin_unifi(
             _messages(message, error)
             + _unifi_overview(settings, lang)
             + _active_table(settings, sessions, unifi_clients, lang),
-            active_tab="unifi",
+            active_tab="hotspot",
             lang=lang,
+            sms_backend=settings.sms_backend,
+        )
+    )
+
+
+@router.get("/unifi")
+def legacy_admin_unifi(request: Request) -> RedirectResponse:
+    return _redirect(lang=_lang(request))
+
+
+@router.get("/sms", response_class=HTMLResponse)
+async def admin_sms(
+    request: Request,
+    settings: Settings = Depends(require_admin),
+    store: Store = Depends(get_store),
+) -> HTMLResponse:
+    lang = _lang(request)
+    message = request.query_params.get("message", "")
+    error = request.query_params.get("error", "")
+    return HTMLResponse(
+        _layout(
+            "SMS Gateway",
+            _messages(message, error)
+            + _wb_overview(settings, lang)
+            + _sms_log_table(store.list_sms_log(), lang),
+            active_tab="sms",
+            lang=lang,
+            sms_backend=settings.sms_backend,
         )
     )
 
@@ -275,8 +290,9 @@ def admin_archive(
             "Archive",
             _messages(message, error)
             + _archive_table(rows, lang),
-            active_tab="unifi",
+            active_tab="hotspot",
             lang=lang,
+            sms_backend=settings.sms_backend,
         )
     )
 
@@ -295,6 +311,11 @@ def wb_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
 @router.get("/unifi-logo")
 def unifi_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
     return FileResponse(UNIFI_LOGO_PATH, media_type="image/png")
+
+
+@router.get("/usb-logo")
+def usb_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
+    return FileResponse(USB_LOGO_PATH, media_type="image/png")
 
 
 @router.get("/send_sms.js")
@@ -339,11 +360,11 @@ async def extend_client(
     store: Store = Depends(get_store),
 ):
     if days not in (1, 2, 7, 365):
-        return _redirect(error="Invalid duration", lang=lang, root="../../unifi")
+        return _redirect(error="Invalid duration", lang=lang, root="../../")
     hotspot_store = HotspotStore(store)
     session = hotspot_store.get_session(client_mac)
     if not session:
-        return _redirect(error="Client was not found", lang=lang, root="../../unifi")
+        return _redirect(error="Client was not found", lang=lang, root="../../")
     now = int(time.time())
     remaining_minutes = max(0, int(session["valid_until"] or now) - now) // 60
     minutes = remaining_minutes + days * 24 * 60
@@ -356,7 +377,7 @@ async def extend_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../unifi")
+        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../")
     authorized_at = hotspot_store.mark_authorized(client_mac, minutes)
     session = hotspot_store.get_session(client_mac)
     record_access_event(
@@ -369,7 +390,7 @@ async def extend_client(
             session["valid_until"],
         ),
     )
-    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../unifi")
+    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/revoke")
@@ -384,9 +405,9 @@ async def revoke_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang, root="../../unifi")
+        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang, root="../../")
     HotspotStore(store).clear_authorized(client_mac)
-    return _redirect(message="Authorization revoked", lang=lang, root="../../unifi")
+    return _redirect(message="Authorization revoked", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/name")
@@ -398,8 +419,8 @@ def update_client_name(
     store: Store = Depends(get_store),
 ):
     if not HotspotStore(store).set_display_name(client_mac, display_name):
-        return _redirect(error="Client was not found", lang=lang, root="../../unifi")
-    return _redirect(message="Client name updated", lang=lang, root="../../unifi")
+        return _redirect(error="Client was not found", lang=lang, root="../../")
+    return _redirect(message="Client name updated", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/block")
@@ -412,9 +433,9 @@ async def block_client(
     try:
         await UniFiClient(settings).block_client(client_mac)
     except Exception as exc:
-        return _redirect(error=f"UniFi block failed: {exc}", lang=lang, root="../../unifi")
+        return _redirect(error=f"UniFi block failed: {exc}", lang=lang, root="../../")
     HotspotStore(store).mark_blocked(client_mac, "Blocked from admin")
-    return _redirect(message="Client blocked", lang=lang, root="../../unifi")
+    return _redirect(message="Client blocked", lang=lang, root="../../")
 
 
 @router.post("/settings")
@@ -437,7 +458,7 @@ async def update_settings(
             shutil.copyfileobj(logo.file, output)
         _set_env_value(settings_path, "HOTSPOT_LOGO_PATH", str(logo_path))
     get_settings.cache_clear()
-    return _redirect(message=_t(lang, "portal_saved"), lang=lang, root="unifi")
+    return _redirect(message=_t(lang, "portal_saved"), lang=lang)
 
 
 @router.post("/test-sms")
@@ -453,8 +474,8 @@ def send_test_sms(
             raise ValueError("message is empty")
         SmsSender(settings).send(normalize_phone(phone), message)
     except Exception as exc:
-        return _redirect(error=f"SMS send failed: {exc}", lang=lang)
-    return _redirect(message=_t(lang, "sms_sent"), lang=lang)
+        return _redirect(error=f"SMS send failed: {exc}", lang=lang, root="sms")
+    return _redirect(message=_t(lang, "sms_sent"), lang=lang, root="sms")
 
 
 async def _safe_unifi_clients(settings: Settings) -> dict[str, dict[str, Any]]:
@@ -554,36 +575,66 @@ def _dashboard_cards(settings: Settings, lang: str, active_tab: str) -> str:
 
 
 def _wb_overview(settings: Settings, lang: str) -> str:
-    script = html.escape(WB_SCRIPT_PATH.read_text(encoding="utf-8"))
     connection = (
         f"{html.escape(settings.wb_mqtt_host)}:{settings.wb_mqtt_port}"
         if settings.sms_backend == "mqtt"
         else html.escape(settings.sms_backend)
     )
+    transport_logo = "usb-logo" if settings.sms_backend == "mmcli" else "wb-logo"
+    transport_name = "USB / ModemManager" if settings.sms_backend == "mmcli" else "Wiren Board / MQTT"
+    if settings.sms_backend == "mmcli":
+        connection_rows = f"""
+          <div><dt>{_t(lang, 'backend')}</dt><dd>MMCLI</dd></div>
+          <div><dt>Modem ID</dt><dd><code>{html.escape(settings.mmcli_modem_id)}</code></dd></div>
+        """
+    else:
+        connection_rows = f"""
+          <div><dt>{_t(lang, 'backend')}</dt><dd>MQTT</dd></div>
+          <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+        """
     return f"""
     <div class="dashboard-grid wb-grid">
       {_test_sms_form(lang)}
       <div class="side-stack">
         <section class="ha-card connection-card compact-card">
-          <div class="card-heading">
-            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 15-4-4 1.4-1.4L11 14.2l4.6-4.6L17 11l-6 6Z"/></svg></span>
+          <div class="card-heading product-heading">
+            <span class="transport-mark"><img src="{transport_logo}" alt="{transport_name}"></span>
             <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'configured')}</p></div>
           </div>
           <dl class="connection-list card-content">
-            <div><dt>{_t(lang, 'backend')}</dt><dd>{html.escape(settings.sms_backend.upper())}</dd></div>
-            <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
-            <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+            {connection_rows}
           </dl>
         </section>
-        <section class="ha-card script-card compact-card">
-          <div class="section-head card-heading">
-            <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
-            <a class="secondary-button icon-download" href="send_sms.js" download title="{_t(lang, 'download')}">↓</a>
-          </div>
-          <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
-        </section>
+        {_transport_details_card(settings, lang)}
       </div>
     </div>
+    """
+
+
+def _transport_details_card(settings: Settings, lang: str) -> str:
+    if settings.sms_backend == "mmcli":
+        return f"""
+        <section class="ha-card script-card compact-card">
+          <div class="card-heading product-heading">
+            <span class="transport-mark"><img src="usb-logo" alt="USB"></span>
+            <div><h2>{_t(lang, 'usb_modem')}</h2><p>{_t(lang, 'usb_help')}</p></div>
+          </div>
+          <dl class="connection-list card-content">
+            <div><dt>Modem ID</dt><dd><code>{html.escape(settings.mmcli_modem_id)}</code></dd></div>
+            <div><dt>Backend</dt><dd><span class="badge sent">MMCLI</span></dd></div>
+          </dl>
+        </section>
+        """
+    script = html.escape(WB_SCRIPT_PATH.read_text(encoding="utf-8"))
+    return f"""
+    <section class="ha-card script-card compact-card">
+      <div class="section-head card-heading">
+        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
+        <a class="secondary-button icon-download" href="send_sms.js" download title="{_t(lang, 'download')}">↓</a>
+      </div>
+      <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
+    </section>
     """
 
 
@@ -881,35 +932,35 @@ def _tabs(lang: str, active_tab: str) -> str:
     archive = "class='active'" if active_tab == "archive" else ""
     return f"""
     <nav class="tabs">
-      <a href="unifi?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
+      <a href="./?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
       <a href="archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
     </nav>
     """
 
 
-def _product_nav(lang: str, active_tab: str) -> str:
-    wb_active = "class='active'" if active_tab == "wb" else ""
-    unifi_active = "class='active'" if active_tab == "unifi" else ""
+def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
+    sms_active = "class='active'" if active_tab == "sms" else ""
+    hotspot_active = "class='active'" if active_tab == "hotspot" else ""
+    sms_logo = "usb-logo" if sms_backend == "mmcli" else "wb-logo"
     return f"""
     <nav class="product-nav" aria-label="Products">
-      <a href="./?lang={html.escape(lang)}" {wb_active}>
-        <span class="nav-mark wb-mark"><img src="wb-logo" alt=""></span><span>WB</span>
+      <a href="./?lang={html.escape(lang)}" {hotspot_active}>
+        <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>{_t(lang, 'hotspot')}</span>
       </a>
-      <a href="unifi?lang={html.escape(lang)}" {unifi_active}>
-        <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>UniFi</span>
+      <a href="sms?lang={html.escape(lang)}" {sms_active}>
+        <span class="nav-mark sms-mark"><img src="{sms_logo}" alt=""></span><span>{_t(lang, 'sms_gateway')}</span>
       </a>
     </nav>
     """
 
 
-def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
+def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: str = "mqtt") -> str:
     ru_active = "class='active'" if lang == "ru" else ""
     en_active = "class='active'" if lang == "en" else ""
-    is_unifi = active_tab == "unifi"
-    brand_logo = "unifi-logo" if is_unifi else "wb-logo"
-    brand_alt = "UniFi" if is_unifi else "Wiren Board"
-    brand_title = "UniFi Hotspot" if is_unifi else "SMS Gateway"
-    brand_subtitle = _t(lang, "unifi_help" if is_unifi else "subtitle")
+    brand_logo = "unifi-logo"
+    brand_alt = "UniFi"
+    brand_title = "UniFi Hotspot"
+    brand_subtitle = _t(lang, "unifi_help")
     return f"""
     <!doctype html>
     <html lang="{html.escape(lang)}">
@@ -917,7 +968,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="icon" href="{brand_logo}">
-        <title>{html.escape(title)} - SMS Gateway Admin</title>
+        <title>{html.escape(title)} - UniFi Hotspot</title>
         <script>
           const savedTheme = localStorage.getItem("sms-theme");
           const initialTheme = savedTheme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
@@ -946,6 +997,9 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .nav-mark {{ width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }}
           .nav-mark img {{ display: block; object-fit: contain; }}
           .wb-mark img {{ width: 30px; height: 30px; }}
+          .sms-mark img {{ width: 30px; height: 30px; object-fit: contain; border-radius: 7px; }}
+          .transport-mark {{ width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 9px; }}
+          .transport-mark img {{ width: 100%; height: 100%; object-fit: contain; }}
           .unifi-mark {{ border-radius: 7px; background: #0559C9; }}
           .unifi-mark img {{ width: 100%; height: 100%; object-fit: contain; }}
           .product-heading .unifi-mark {{ width: 38px; height: 38px; border-radius: 9px; }}
@@ -1078,7 +1132,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
             </button>
           </div>
         </header>
-        <main>{_product_nav(lang, active_tab)}{content}</main>
+        <main>{_product_nav(lang, active_tab, sms_backend)}{content}</main>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
         <dialog id="confirm-dialog">
           <div class="dialog-content"><h2>{_t(lang, "confirm_title")}</h2><p>{_t(lang, "confirm_text")}</p></div>

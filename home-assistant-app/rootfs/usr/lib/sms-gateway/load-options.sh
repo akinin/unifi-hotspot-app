@@ -1,6 +1,8 @@
 #!/usr/bin/with-contenv bash
 
 export API_TOKEN="$(bashio::config 'api_token')"
+export SMS_BACKEND="$(bashio::config 'sms_backend')"
+export MMCLI_MODEM_ID="$(bashio::config 'mmcli_modem_id')"
 export WB_MQTT_HOST="$(bashio::config 'wb_mqtt_host')"
 export WB_MQTT_PORT="$(bashio::config 'wb_mqtt_port')"
 export WB_MQTT_USERNAME="$(bashio::config 'wb_mqtt_username')"
@@ -26,8 +28,6 @@ export APP_HOST=0.0.0.0
 export DATABASE_PATH=/data/sms_gateway.sqlite3
 export SETTINGS_FILE_PATH=/data/runtime.env
 export HOTSPOT_ACCESS_LOG_PATH=/data/hotspot_access.csv
-export SMS_BACKEND=mqtt
-
 if [[ ! -e "${SETTINGS_FILE_PATH}" ]]; then
     safe_portal_title="${configured_portal_title//$'\n'/ }"
     printf 'HOTSPOT_PORTAL_TITLE=%s\nHOTSPOT_LOGO_PATH=/data/hotspot_logo.png\n' \
@@ -50,4 +50,9 @@ if [[ -z "${API_TOKEN}" ]]; then
 fi
 if bashio::config.true 'unifi_dry_run'; then
     bashio::log.warning "UniFi dry-run is enabled; no client authorization state will be changed"
+fi
+if [[ "${SMS_BACKEND}" == "mmcli" ]]; then
+    bashio::log.info "USB ModemManager SMS backend selected (modem: ${MMCLI_MODEM_ID})"
+else
+    bashio::log.info "Wiren Board MQTT SMS backend selected"
 fi

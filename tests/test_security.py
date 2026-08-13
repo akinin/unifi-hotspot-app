@@ -66,7 +66,7 @@ def test_admin_markup_uses_ingress_safe_relative_links() -> None:
 
     assert 'action="settings"' in _settings_form(settings, "en", "active")
     assert 'src="logo"' in _settings_form(settings, "en", "active")
-    assert 'href="unifi?lang=en"' in _tabs("en", "active")
+    assert 'href="./?lang=en"' in _tabs("en", "active")
     assert 'href="archive.csv"' in _archive_table([], "en")
     assert _redirect(message="done", root="../../").headers["location"].startswith("../../?")
 
@@ -76,9 +76,9 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     active = _active_table(settings, [], {}, "en")
     archive = _archive_table([], "en")
     page = _layout(
-        "Wiren Board",
+        "UniFi Hotspot",
         _wb_overview(settings, "en") + _sms_log_table([], "en"),
-        "wb",
+        "sms",
         "en",
     )
 
@@ -89,7 +89,8 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'id="confirm-dialog"' in page
     assert 'class="toast"' in page
     assert 'src="wb-logo"' in page
-    assert 'href="unifi?lang=en"' in page
+    assert 'href="./?lang=en"' in page
+    assert 'href="sms?lang=en"' in page
     assert 'class="nav-mark unifi-mark"' in page
     assert "#0559C9" in page
 
@@ -108,6 +109,22 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "API key" in page
     assert "secret-key" not in page
     assert 'src="unifi-logo"' in page
+
+
+def test_usb_backend_uses_supplied_usb_branding() -> None:
+    settings = Settings(app_role="admin", sms_backend="mmcli", mmcli_modem_id="any")
+    page = _layout(
+        "SMS Gateway",
+        _wb_overview(settings, "en"),
+        "sms",
+        "en",
+        settings.sms_backend,
+    )
+
+    assert 'src="usb-logo"' in page
+    assert "USB / ModemManager" in page
+    assert "MMCLI" in page
+    assert "Required WB script" not in page
 
 
 def test_active_clients_use_compact_action_popover() -> None:

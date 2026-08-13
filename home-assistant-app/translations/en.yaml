@@ -1,4 +1,10 @@
 configuration:
+  sms_backend:
+    name: SMS transport
+    description: mqtt for Wiren Board, mmcli for a USB modem through ModemManager.
+  mmcli_modem_id:
+    name: USB modem ID
+    description: Keep any for automatic selection.
   api_token:
     name: API token
     description: Required bearer token for protected HTTP API methods.
