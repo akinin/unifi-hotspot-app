@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Start D-Bus and ModemManager only when the USB backend is selected.
+- Run the USB D-Bus socket without unsupported UID/GID changes inside the protected Home Assistant app container.
+
 ## 0.5.0
 
 - Reposition the Home Assistant App as UniFi Hotspot with an integrated SMS transport.
