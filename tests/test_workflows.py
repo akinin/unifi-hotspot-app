@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import yaml
@@ -30,11 +31,14 @@ def test_wirenboard_sms_rule_is_documented_and_included() -> None:
     assert "send_sms.js" in docs
 
 
-def test_brand_svg_assets_are_included() -> None:
+def test_brand_assets_are_included() -> None:
     wb = Path("hotspot/assets/wb.svg").read_text(encoding="utf-8")
-    unifi = Path("hotspot/assets/unifi.svg").read_text(encoding="utf-8")
+    unifi = Path("hotspot/assets/unifi.png").read_bytes()
 
-    for asset in (wb, unifi):
-        assert "<svg" in asset
-        assert "<script" not in asset.lower()
-        assert "javascript:" not in asset.lower()
+    assert "<svg" in wb
+    assert "<script" not in wb.lower()
+    assert "javascript:" not in wb.lower()
+    assert unifi.startswith(b"\x89PNG\r\n\x1a\n")
+    assert hashlib.sha256(unifi).hexdigest() == (
+        "b0588853cf91a58aa0dfdeaf724b6d4fae6a0202cfe523ba08a17bd7b89c6f53"
+    )

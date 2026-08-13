@@ -110,6 +110,23 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert 'src="unifi-logo"' in page
 
 
+def test_active_clients_use_compact_action_popover() -> None:
+    session = {
+        "client_mac": "aa:bb:cc:dd:ee:ff",
+        "phone": "+79990000000",
+        "display_name": "Guest",
+        "authorized_at": 1_700_000_000,
+        "valid_until": 1_700_086_400,
+    }
+    page = _active_table(Settings(app_role="admin"), [session], {}, "ru")
+
+    assert page.count("<th>") == 5
+    assert 'class="client-actions-popover" popover' in page
+    assert "Продлить" in page
+    assert "Отозвать" in page
+    assert "Блокировать" in page
+
+
 def test_sms_store_records_delivery_history(tmp_path) -> None:
     from api.store import Store
 
