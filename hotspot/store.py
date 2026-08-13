@@ -64,6 +64,15 @@ class HotspotStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hotspot_client_cache (
+                    client_mac TEXT PRIMARY KEY,
+                    last_ip TEXT,
+                    updated_at INTEGER NOT NULL
+                )
+                """
+            )
             auth_columns = {
                 row["name"]
                 for row in conn.execute("PRAGMA table_info(hotspot_authorizations)").fetchall()
@@ -225,6 +234,34 @@ class HotspotStore:
                 """,
                 (now,),
             ).fetchall()
+
+    def remember_client_ips(self, clients: list[dict[str, object]]) -> None:
+        now = int(time.time())
+        values = [
+            (str(client["mac"]).lower(), str(client["ip"]), now)
+            for client in clients
+            if client.get("mac") and client.get("ip")
+        ]
+        if not values:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO hotspot_client_cache(client_mac, last_ip, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(client_mac) DO UPDATE SET
+                    last_ip = excluded.last_ip,
+                    updated_at = excluded.updated_at
+                """,
+                values,
+            )
+
+    def cached_client_ips(self) -> dict[str, str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT client_mac, last_ip FROM hotspot_client_cache WHERE last_ip IS NOT NULL"
+            ).fetchall()
+        return {str(row["client_mac"]): str(row["last_ip"]) for row in rows}
 
     def list_archive(self, limit: int = 200) -> list[sqlite3.Row]:
         with self._connect() as conn:

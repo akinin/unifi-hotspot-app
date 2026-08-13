@@ -255,6 +255,9 @@ def test_active_clients_use_compact_action_popover() -> None:
     assert "Продлить" in page
     assert "Отозвать" in page
     assert "Блокировать" in page
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in _layout(
+        "Test", page, "hotspot", "ru"
+    )
 
 
 def test_active_clients_include_existing_unifi_authorizations(monkeypatch, tmp_path) -> None:
@@ -301,6 +304,20 @@ def test_imported_unifi_client_has_compact_actions_and_no_fake_phone() -> None:
     assert "· UniFi" in page
     assert "+1d" in page
     assert ">None<" not in page
+
+
+def test_last_known_client_ip_is_retained(tmp_path) -> None:
+    store = HotspotStore(Store(str(tmp_path / "hotspot.sqlite3")))
+    store.remember_client_ips(
+        [{"mac": "AA:BB:CC:DD:EE:FF", "ip": "10.10.10.25"}]
+    )
+    store.remember_client_ips(
+        [{"mac": "aa:bb:cc:dd:ee:ff", "ip": None}]
+    )
+
+    assert store.cached_client_ips() == {
+        "aa:bb:cc:dd:ee:ff": "10.10.10.25"
+    }
 
 
 def test_sms_store_records_delivery_history(tmp_path) -> None:

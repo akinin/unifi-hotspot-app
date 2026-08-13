@@ -87,7 +87,8 @@ async def active_clients(
     settings: Settings = Depends(get_settings),
     store: Store = Depends(get_store),
 ) -> dict[str, object]:
-    sessions = _hotspot_store(store).list_active_sessions()
+    hotspot_store = _hotspot_store(store)
+    sessions = hotspot_store.list_active_sessions()
     try:
         clients = await UniFiClient(settings).list_clients_cached()
     except Exception as exc:
@@ -95,11 +96,16 @@ async def active_clients(
         unifi_error = str(exc)
     else:
         unifi_error = None
+    hotspot_store.remember_client_ips(clients)
+    cached_ips = hotspot_store.cached_client_ips()
     by_mac = {
         str(client.get("mac", "")).lower(): client
         for client in clients
         if client.get("mac")
     }
+    for mac, client in by_mac.items():
+        if not client.get("ip") and cached_ips.get(mac):
+            client["ip"] = cached_ips[mac]
     items = []
     known_macs: set[str] = set()
     for session in sessions:
