@@ -1125,7 +1125,7 @@ def _portal_preview(settings: Settings, lang: str) -> str:
       <section class="ha-card preview-card">
         <div class="section-head card-heading preview-heading">
           <div class="section-title">
-            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span>
+            <span class="card-icon preview-monitor-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 16H3V4h18v12Zm0-14H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7v2H8v2h8v-2h-2v-2h7a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Z"/></svg></span>
             <div><h2>{_t(lang, 'preview_title')}</h2></div>
           </div>
           <div class="preview-tools" role="group" aria-label="{_t(lang, 'preview')}">
@@ -1215,6 +1215,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .designer-fields input[type=range] {{ min-height: 28px; padding: 0; border: 0; box-shadow: none; accent-color: var(--primary); }}
           .designer-fields output {{ color: var(--text); font-variant-numeric: tabular-nums; }}
           .preview-heading {{ flex-wrap: wrap; }}
+          .preview-monitor-icon {{ border-radius: 8px; }}
           .preview-tools {{ display: flex; align-items: center; gap: 6px; margin-left: auto; }}
           .preview-tools .active {{ border-color: var(--primary); background: rgba(3,169,244,.1); }}
           .preview-reload {{ width: 34px; padding: 0; font-size: 19px; }}
