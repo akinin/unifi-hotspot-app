@@ -1396,7 +1396,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .client-display:hover {{ color: var(--primary); background: transparent; }}
           .client-name input {{ width: 170px; min-height: 34px; padding: 6px 8px; }}
           .notice {{ display: flex; align-items: center; gap: 10px; margin: 0 0 18px; padding: 12px 14px; border-radius: 10px; font-weight: 500; box-shadow: var(--shadow); }}
-          .notice-icon {{ width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: currentColor; color: #fff; }}
+          .notice-icon {{ width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.94); color: inherit; font-weight: 800; box-shadow: 0 0 0 1px currentColor inset; }}
           .success {{ border: 1px solid rgba(67,160,71,.3); background: #edf7ee; color: #2e7d32; }}
           .error {{ border: 1px solid rgba(219,68,55,.3); background: #fff0ef; color: #c62828; }}
           .empty {{ padding: 40px 20px; color: var(--muted); text-align: center; }}
