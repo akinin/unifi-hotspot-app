@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3
+
+- Run ModemManager at normal log level to avoid filling the app log with virtual TTY discovery details.
+
 ## 0.5.2
 
 - Replace the combined SMS Gateway tab with separate WB and USB tabs.
