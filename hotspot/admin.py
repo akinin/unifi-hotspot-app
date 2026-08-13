@@ -829,7 +829,6 @@ def _unifi_overview(settings: Settings, lang: str, active_count: int = 0) -> str
     return f"""
     <section class="ha-card hotspot-overview-card">
       <div class="card-heading hotspot-overview-heading">
-        <span class="logo-preview"><img src="logo" alt="{_t(lang, 'logo')}"></span>
         <div><h2>{_t(lang, 'portal')}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
         <a class="secondary-button portal-edit-button" href="preview?lang={html.escape(lang)}">{_t(lang, 'preview')}</a>
       </div>

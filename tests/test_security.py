@@ -157,7 +157,7 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "Dry-run" in page
     assert "API key" in page
     assert "secret-key" not in page
-    assert 'src="logo"' in page
+    assert 'src="logo"' not in page
     assert page.count('class="ha-card hotspot-overview-card"') == 1
     assert 'class="hotspot-overview-groups"' in page
     assert page.count('class="overview-group') >= 3
