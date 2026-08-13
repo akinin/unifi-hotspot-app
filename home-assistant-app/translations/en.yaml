@@ -40,6 +40,10 @@ configuration:
     name: Guest access duration
   hotspot_portal_title:
     name: Portal title
+  hotspot_background_color:
+    name: Portal background color
+  hotspot_logo_size:
+    name: Portal logo size
   telegram_bot_token:
     name: Telegram bot token
   telegram_chat_id:

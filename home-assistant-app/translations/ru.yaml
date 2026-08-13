@@ -40,6 +40,10 @@ configuration:
     name: Длительность гостевого доступа
   hotspot_portal_title:
     name: Заголовок портала
+  hotspot_background_color:
+    name: Цвет фона портала
+  hotspot_logo_size:
+    name: Размер логотипа портала
   telegram_bot_token:
     name: Токен Telegram-бота
   telegram_chat_id:

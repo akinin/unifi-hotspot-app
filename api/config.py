@@ -1,5 +1,6 @@
 from functools import lru_cache
 import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic import Field, SecretStr
@@ -38,6 +39,8 @@ class Settings(BaseSettings):
     hotspot_portal_port: int = 8880
     hotspot_admin_port: int = 8089
     hotspot_portal_title: str = "Welcome to Olshaniki"
+    hotspot_background_color: str = "#10141b"
+    hotspot_logo_size: int = 132
     hotspot_logo_path: str = "./data/hotspot_logo.png"
 
     hotspot_access_log_path: str = "./data/hotspot_access.csv"
@@ -51,6 +54,18 @@ class Settings(BaseSettings):
     otp_message_template: str = "Your Wi-Fi code: {code}"
 
 
-@lru_cache
+@lru_cache(maxsize=8)
+def _settings_for_file(path: str, modified_ns: int) -> Settings:
+    return Settings(_env_file=path)
+
+
 def get_settings() -> Settings:
-    return Settings(_env_file=os.environ.get("SETTINGS_FILE_PATH", ".env"))
+    path = os.environ.get("SETTINGS_FILE_PATH", ".env")
+    try:
+        modified_ns = Path(path).stat().st_mtime_ns
+    except FileNotFoundError:
+        modified_ns = 0
+    return _settings_for_file(path, modified_ns)
+
+
+get_settings.cache_clear = _settings_for_file.cache_clear

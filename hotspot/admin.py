@@ -1,6 +1,8 @@
+import base64
 import csv
 import html
 import io
+import re
 import shutil
 import time
 from datetime import datetime
@@ -127,6 +129,10 @@ TEXT = {
         "mobile": "Mobile",
         "desktop": "Wide",
         "reload_preview": "Refresh preview",
+        "background": "Background",
+        "logo_size": "Logo size",
+        "save_size": "Save size",
+        "portal_settings": "Portal appearance",
     },
     "ru": {
         "active": "Активные",
@@ -226,6 +232,10 @@ TEXT = {
         "mobile": "Телефон",
         "desktop": "Широко",
         "reload_preview": "Обновить предпросмотр",
+        "background": "Фон",
+        "logo_size": "Размер логотипа",
+        "save_size": "Сохранить размер",
+        "portal_settings": "Оформление портала",
     },
 }
 
@@ -298,8 +308,8 @@ def admin_preview(
     return HTMLResponse(
         _layout(
             _t(lang, "preview"),
-            _portal_preview(lang),
-            active_tab="preview",
+            _portal_preview(settings, lang),
+            active_tab="hotspot",
             lang=lang,
             sms_backend=settings.sms_backend,
         )
@@ -311,17 +321,65 @@ def admin_preview_content(
     request: Request,
     settings: Settings = Depends(require_admin),
 ) -> HTMLResponse:
-    return HTMLResponse(_portal_preview_content(_lang(request)))
+    requested_size = request.query_params.get("logo_size", "")
+    logo_size = int(requested_size) if requested_size.isdigit() else settings.hotspot_logo_size
+    return HTMLResponse(_portal_preview_content(_lang(request), settings, logo_size))
 
 
-def _portal_preview_content(lang: str) -> str:
-    page = _page_request_phone("", "", "", "", lang)
-    # Keep image requests inside the Home Assistant ingress path. The iframe is
-    # sandboxed by the parent view, so its forms and scripts cannot run.
-    page = page.replace('"/assets/hotspot-logo"', '"../logo"')
-    page = page.replace('"/assets/ahs.png"', '"../logo"')
+def _portal_preview_content(
+    lang: str,
+    settings: Optional[Settings] = None,
+    logo_size: Optional[int] = None,
+) -> str:
+    settings = settings or get_settings()
+    page = _page_request_phone("", "", "", "", lang, logo_size)
+    # Embed the image so Home Assistant ingress path rewriting cannot break it.
+    logo = _logo_data_uri(settings)
+    page = page.replace('"/assets/hotspot-logo"', f'"{logo}"')
+    page = page.replace('"/assets/ahs.png"', f'"{logo}"')
     page = page.replace(" required autofocus", " required")
+    page = re.sub(r"<script>.*?</script>", "", page, flags=re.DOTALL)
+    page = page.replace(
+        "</body>",
+        """
+        <script>
+          addEventListener("message", (event) => {
+            const data = event.data || {};
+            if (data.type !== "portal-preview") return;
+            const heading = document.querySelector("main h1");
+            const logo = document.querySelector(".logo");
+            if (heading && typeof data.title === "string") heading.textContent = data.title;
+            if (logo && typeof data.logo === "string" && data.logo) logo.src = data.logo;
+            if (logo && Number.isFinite(data.logoSize)) {
+              const size = Math.max(64, Math.min(240, data.logoSize));
+              logo.style.width = `${size}px`;
+              logo.style.height = `${size}px`;
+            }
+            if (typeof data.background === "string" && /^#[0-9a-f]{6}$/i.test(data.background)) {
+              document.body.style.backgroundColor = data.background;
+              document.body.style.backgroundImage = `radial-gradient(circle at top, color-mix(in srgb, ${data.background}, white 24%) 0, ${data.background} 42%, color-mix(in srgb, ${data.background}, black 55%) 100%)`;
+            }
+          });
+        </script>
+        </body>
+        """,
+    )
     return page
+
+
+def _logo_data_uri(settings: Settings) -> str:
+    logo_path = Path(settings.hotspot_logo_path)
+    if not logo_path.exists():
+        logo_path = UNIFI_LOGO_PATH
+    media_types = {
+        ".svg": "image/svg+xml",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+    media_type = media_types.get(logo_path.suffix.lower(), "image/png")
+    encoded = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
 
 
 def _sms_workspace(
@@ -515,24 +573,42 @@ async def block_client(
 @router.post("/settings")
 async def update_settings(
     title: str = Form(...),
+    background: str = Form(default="#10141b"),
+    logo_size: int = Form(default=132),
+    return_to: str = Form(default="hotspot"),
     lang: str = Form(default="en"),
     logo: Optional[UploadFile] = File(default=None),
     settings: Settings = Depends(require_admin),
 ):
     title = title.strip()[:120] or "Welcome"
+    background = background.strip()
+    if len(background) != 7 or not background.startswith("#") or any(
+        character not in "0123456789abcdefABCDEF" for character in background[1:]
+    ):
+        background = "#10141b"
     settings_path = Path(settings.settings_file_path)
     _set_env_value(settings_path, "HOTSPOT_PORTAL_TITLE", title)
+    _set_env_value(settings_path, "HOTSPOT_BACKGROUND_COLOR", background)
+    _set_env_value(settings_path, "HOTSPOT_LOGO_SIZE", str(max(64, min(240, logo_size))))
     if logo and logo.filename:
         suffix = Path(logo.filename).suffix.lower()
         if suffix not in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
-            return _redirect(error="Unsupported logo format", lang=lang)
+            return _redirect(
+                error="Unsupported logo format",
+                lang=lang,
+                root="preview" if return_to == "preview" else ADMIN_ROOT,
+            )
         logo_path = settings_path.parent / f"hotspot_logo{suffix}"
         logo_path.parent.mkdir(parents=True, exist_ok=True)
         with logo_path.open("wb") as output:
             shutil.copyfileobj(logo.file, output)
         _set_env_value(settings_path, "HOTSPOT_LOGO_PATH", str(logo_path))
     get_settings.cache_clear()
-    return _redirect(message=_t(lang, "portal_saved"), lang=lang)
+    return _redirect(
+        message=_t(lang, "portal_saved"),
+        lang=lang,
+        root="preview" if return_to == "preview" else ADMIN_ROOT,
+    )
 
 
 @router.post("/test-sms")
@@ -624,34 +700,16 @@ def _messages(message: str, error: str) -> str:
     return ""
 
 
-def _settings_form(settings: Settings, lang: str, active_tab: str) -> str:
-    title = html.escape(settings.hotspot_portal_title)
+def _portal_summary(settings: Settings, lang: str) -> str:
     return f"""
     <section class="ha-card portal-card">
       <div class="card-heading">
-        <span class="card-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM7.76 14.26l1.42 1.42a4 4 0 0 1 5.64 0l1.42-1.42a6 6 0 0 0-8.48 0ZM4.93 11.43l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42a10 10 0 0 0-14.14 0ZM2.1 8.6 3.5 10a12 12 0 0 1 17 0l1.4-1.4a14 14 0 0 0-19.8 0Z"/></svg>
-        </span>
-        <div><h2>{_t(lang, "portal")}</h2><p>{_t(lang, "portal_help")}</p></div>
+        <span class="logo-preview"><img src="logo" alt="{_t(lang, 'logo')}"></span>
+        <div><h2>{_t(lang, "portal")}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
+        <a class="secondary-button portal-edit-button" href="preview?lang={html.escape(lang)}">{_t(lang, 'preview')}</a>
       </div>
-      <form class="settings portal-settings card-content" method="post" action="settings" enctype="multipart/form-data">
-        <input type="hidden" name="lang" value="{html.escape(lang)}">
-        <label class="field"><span>{_t(lang, "welcome_text")}</span><input name="title" value="{title}" maxlength="120"></label>
-        <label class="logo-picker compact-logo-picker" title="{_t(lang, 'choose_file')}">
-          <span class="logo-preview">
-            <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-            <img id="logo-preview" src="logo" alt="{_t(lang, 'logo')}">
-          </span>
-          <span class="logo-copy"><strong>{_t(lang, "logo")}</strong><small>{_t(lang, "change_logo")}</small></span>
-        </label>
-        <div class="card-actions"><button class="primary-button" type="submit">{_t(lang, "save")}</button></div>
-      </form>
     </section>
     """
-
-
-def _dashboard_cards(settings: Settings, lang: str, active_tab: str) -> str:
-    return f'<div class="dashboard-grid">{_settings_form(settings, lang, active_tab)}{_test_sms_form(lang, settings.sms_backend)}</div>'
 
 
 def _wb_overview(settings: Settings, lang: str) -> str:
@@ -730,7 +788,7 @@ def _unifi_overview(settings: Settings, lang: str) -> str:
     mode_class = "warning" if settings.unifi_dry_run else "sent"
     return f"""
     <div class="dashboard-grid unifi-grid">
-      {_settings_form(settings, lang, 'active')}
+      {_portal_summary(settings, lang)}
       <section class="ha-card connection-card compact-card">
         <div class="card-heading product-heading">
           <span class="unifi-mark"><img src="unifi-logo" alt="UniFi"></span>
@@ -1011,10 +1069,12 @@ def _dt(value) -> str:
 def _tabs(lang: str, active_tab: str) -> str:
     active = "class='active'" if active_tab == "active" else ""
     archive = "class='active'" if active_tab == "archive" else ""
+    preview = "class='active'" if active_tab == "preview" else ""
     return f"""
     <nav class="tabs">
       <a href="./?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
       <a href="archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
+      <a href="preview?lang={html.escape(lang)}" {preview}>{_t(lang, "preview")}</a>
     </nav>
     """
 
@@ -1023,14 +1083,10 @@ def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
     wb_active = "class='active'" if active_tab == "wb" else ""
     usb_active = "class='active'" if active_tab == "usb" else ""
     hotspot_active = "class='active'" if active_tab == "hotspot" else ""
-    preview_active = "class='active'" if active_tab == "preview" else ""
     return f"""
     <nav class="product-nav" aria-label="Products">
       <a href="./?lang={html.escape(lang)}" {hotspot_active}>
         <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>{_t(lang, 'hotspot')}</span>
-      </a>
-      <a href="preview?lang={html.escape(lang)}" {preview_active}>
-        <span class="nav-mark preview-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span><span>{_t(lang, 'preview')}</span>
       </a>
       <a href="wb?lang={html.escape(lang)}" {wb_active}>
         <span class="nav-mark sms-mark"><img src="wb-logo" alt=""></span><span>WB</span>
@@ -1042,26 +1098,53 @@ def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
     """
 
 
-def _portal_preview(lang: str) -> str:
+def _portal_preview(settings: Settings, lang: str) -> str:
+    logo_size = max(64, min(240, settings.hotspot_logo_size))
+    title = html.escape(settings.hotspot_portal_title, quote=True)
+    background = html.escape(settings.hotspot_background_color, quote=True)
     return f"""
-    <section class="ha-card preview-card">
-      <div class="section-head card-heading preview-heading">
-        <div class="section-title">
-          <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span>
-          <div><h2>{_t(lang, 'preview_title')}</h2><p>{_t(lang, 'preview_help')}</p></div>
+    <div class="preview-workspace">
+      <aside class="ha-card designer-sidebar">
+        <form id="portal-settings" method="post" action="settings" enctype="multipart/form-data">
+          <input type="hidden" name="lang" value="{html.escape(lang)}">
+          <input type="hidden" name="return_to" value="preview">
+          <div class="card-heading designer-heading">
+            <label class="logo-picker portal-icon-picker" title="{_t(lang, 'change_logo')}">
+              <span class="logo-preview">
+                <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+                <img id="logo-preview" src="logo" alt="{_t(lang, 'logo')}">
+              </span>
+            </label>
+            <div><h2>{_t(lang, 'portal_settings')}</h2><p>{_t(lang, 'preview_help')}</p></div>
+          </div>
+          <div class="designer-fields card-content">
+            <label class="field"><span>{_t(lang, 'welcome_text')}</span><input id="preview-title" name="title" value="{title}" maxlength="120"></label>
+            <label class="field color-field"><span>{_t(lang, 'background')}</span><input id="preview-background" name="background" type="color" value="{background}"></label>
+            <label class="field"><span>{_t(lang, 'logo_size')} <output id="preview-logo-size-value" for="preview-logo-size">{logo_size}px</output></span><input id="preview-logo-size" name="logo_size" type="range" min="64" max="240" step="4" value="{logo_size}"></label>
+            <button class="primary-button" type="submit">{_t(lang, 'save')}</button>
+          </div>
+        </form>
+      </aside>
+      <section class="ha-card preview-card">
+        <div class="section-head card-heading preview-heading">
+          <div class="section-title">
+            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span>
+            <div><h2>{_t(lang, 'preview_title')}</h2></div>
+          </div>
+          {_tabs(lang, 'preview')}
+          <div class="preview-tools" role="group" aria-label="{_t(lang, 'preview')}">
+            <button type="button" class="secondary-button preview-size active" data-preview-width="390" aria-pressed="true">{_t(lang, 'mobile')}</button>
+            <button type="button" class="secondary-button preview-size" data-preview-width="760" aria-pressed="false">{_t(lang, 'desktop')}</button>
+            <button type="button" class="secondary-button preview-reload" title="{_t(lang, 'reload_preview')}" aria-label="{_t(lang, 'reload_preview')}">↻</button>
+          </div>
         </div>
-        <div class="preview-tools" role="group" aria-label="{_t(lang, 'preview')}">
-          <button type="button" class="secondary-button preview-size active" data-preview-width="390" aria-pressed="true">{_t(lang, 'mobile')}</button>
-          <button type="button" class="secondary-button preview-size" data-preview-width="760" aria-pressed="false">{_t(lang, 'desktop')}</button>
-          <button type="button" class="secondary-button preview-reload" title="{_t(lang, 'reload_preview')}" aria-label="{_t(lang, 'reload_preview')}">↻</button>
+        <div class="preview-stage">
+          <div class="preview-device" style="--preview-width: 390px">
+            <iframe id="hotspot-preview" src="preview/content?lang={html.escape(lang)}&amp;logo_size={logo_size}" title="{_t(lang, 'preview_title')}" sandbox="allow-scripts"></iframe>
+          </div>
         </div>
-      </div>
-      <div class="preview-stage">
-        <div class="preview-device" style="--preview-width: 390px">
-          <iframe id="hotspot-preview" src="preview/content?lang={html.escape(lang)}" title="{_t(lang, 'preview_title')}" sandbox=""></iframe>
-        </div>
-      </div>
-    </section>
+      </section>
+    </div>
     """
 
 
@@ -1101,14 +1184,12 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
           .language a.active {{ color: #fff; background: var(--primary); }}
           main {{ max-width: 1280px; margin: 0 auto; padding: 16px 16px 32px; }}
-          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 148px)); gap: 10px; }}
+          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 148px)); gap: 10px; }}
           .product-nav a {{ min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 15px; font-weight: 600; transition: border-color .15s, background .15s; }}
           .product-nav a:hover {{ border-color: var(--primary); }}
           .product-nav a.active {{ border-color: var(--primary); background: rgba(3,169,244,.09); color: var(--primary); }}
           .nav-mark {{ width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }}
           .nav-mark img {{ display: block; object-fit: contain; }}
-          .preview-mark {{ border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
-          .preview-mark svg {{ width: 19px; height: 19px; fill: currentColor; }}
           .wb-mark img {{ width: 30px; height: 30px; }}
           .sms-mark img {{ width: 30px; height: 30px; object-fit: contain; border-radius: 7px; }}
           .transport-mark {{ width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 9px; }}
@@ -1121,6 +1202,15 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .side-stack {{ min-width: 0; display: grid; align-content: start; gap: 12px; }}
           .side-stack .ha-card {{ margin: 0; }}
           .unifi-grid .ha-card {{ height: 100%; }}
+          .portal-edit-button {{ margin-left: auto; }}
+          .preview-workspace {{ display: grid; grid-template-columns: minmax(260px, 310px) minmax(0, 1fr); gap: 12px; align-items: start; }}
+          .preview-workspace .ha-card {{ margin-bottom: 0; }}
+          .designer-sidebar {{ position: sticky; top: 70px; }}
+          .designer-heading {{ align-items: flex-start; }}
+          .designer-fields {{ display: grid; gap: 15px; padding-top: 8px; }}
+          .designer-fields .primary-button {{ width: 100%; margin-top: 3px; }}
+          .designer-fields input[type=range] {{ min-height: 28px; padding: 0; border: 0; box-shadow: none; accent-color: var(--primary); }}
+          .designer-fields output {{ color: var(--text); font-variant-numeric: tabular-nums; }}
           .preview-heading {{ flex-wrap: wrap; }}
           .preview-tools {{ display: flex; align-items: center; gap: 6px; margin-left: auto; }}
           .preview-tools .active {{ border-color: var(--primary); background: rgba(3,169,244,.1); }}
@@ -1154,11 +1244,12 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           textarea {{ min-height: 72px; resize: vertical; line-height: 1.4; }}
           input:focus, textarea:focus {{ border-color: var(--primary); box-shadow: 0 0 0 2px rgba(3,169,244,.18); }}
           input[type=file] {{ position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; pointer-events: none; }}
+          .color-field input[type=color] {{ width: 48px; min-height: 40px; padding: 4px; cursor: pointer; }}
           .logo-picker {{ display: flex; align-items: center; gap: 12px; width: max-content; max-width: 100%; cursor: pointer; }}
           .logo-preview {{ width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 1px solid var(--divider); border-radius: 9px; background: #0559C9; transition: border-color .15s, transform .15s; }}
           .logo-picker:hover .logo-preview {{ border-color: var(--primary); transform: translateY(-1px); }}
           .logo-preview img {{ width: 100%; height: 100%; display: block; object-fit: contain; padding: 0; }}
-          .compact-logo-picker .logo-copy {{ display: none; }}
+          .portal-icon-picker {{ flex: 0 0 auto; }}
           .logo-copy {{ display: grid; gap: 2px; color: var(--text); }}
           .logo-copy small {{ margin: 0; color: var(--muted); font-weight: 400; }}
           .card-actions {{ display: flex; justify-content: flex-end; padding-top: 2px; }}
@@ -1234,9 +1325,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} .portal-settings {{ grid-template-columns: minmax(200px, 1fr) auto auto; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .portal-settings {{ grid-template-columns: minmax(0, 1fr) auto; }} .portal-settings .field {{ grid-column: 1 / -1; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(2, 1fr); }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
+          @media (max-width: 900px) {{ .dashboard-grid, .preview-workspace {{ grid-template-columns: 1fr; }} .designer-sidebar {{ position: static; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
         </style>
       </head>
       <body>
@@ -1267,7 +1357,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           const logoPreview = document.getElementById("logo-preview");
           if (logoInput && logoPreview) {{
             logoInput.addEventListener("change", () => {{
-              if (logoInput.files.length) logoPreview.src = URL.createObjectURL(logoInput.files[0]);
+              if (!logoInput.files.length) return;
+              const reader = new FileReader();
+              reader.addEventListener("load", () => {{
+                logoPreview.src = String(reader.result);
+                sendPortalPreview();
+              }});
+              reader.readAsDataURL(logoInput.files[0]);
             }});
           }}
           document.getElementById("theme-toggle").addEventListener("click", () => {{
@@ -1309,6 +1405,27 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           updateMessageCounter();
           const previewDevice = document.querySelector(".preview-device");
           const previewFrame = document.getElementById("hotspot-preview");
+          const logoSize = document.getElementById("preview-logo-size");
+          const logoSizeValue = document.getElementById("preview-logo-size-value");
+          const previewTitle = document.getElementById("preview-title");
+          const previewBackground = document.getElementById("preview-background");
+          function sendPortalPreview() {{
+            if (!previewFrame?.contentWindow) return;
+            previewFrame.contentWindow.postMessage({{
+              type: "portal-preview",
+              title: previewTitle?.value || "",
+              background: previewBackground?.value || "#10141b",
+              logoSize: Number(logoSize?.value || 132),
+              logo: logoPreview?.src || "",
+            }}, "*");
+          }}
+          logoSize?.addEventListener("input", () => {{
+            logoSizeValue.textContent = `${{logoSize.value}}px`;
+            sendPortalPreview();
+          }});
+          previewTitle?.addEventListener("input", sendPortalPreview);
+          previewBackground?.addEventListener("input", sendPortalPreview);
+          previewFrame?.addEventListener("load", sendPortalPreview);
           document.querySelectorAll("[data-preview-width]").forEach((button) => {{
             button.addEventListener("click", () => {{
               previewDevice.style.setProperty("--preview-width", `${{button.dataset.previewWidth}}px`);

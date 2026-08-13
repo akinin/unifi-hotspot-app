@@ -1,5 +1,5 @@
 name: UniFi Hotspot
-version: "0.5.4"
+version: "0.5.5"
 slug: wirenboard_sms
 description: UniFi guest portal with an integrated WB or USB SMS gateway
 url: https://github.com/akinin/wirenboard-sms/tree/main/home-assistant-app
@@ -39,6 +39,8 @@ options:
   unifi_verify_tls: false
   unifi_auth_minutes: 1440
   hotspot_portal_title: Welcome to Olshaniki
+  hotspot_background_color: "#10141b"
+  hotspot_logo_size: 132
   telegram_bot_token: ""
   telegram_chat_id: ""
   otp_ttl_seconds: 300
@@ -64,6 +66,8 @@ schema:
   unifi_verify_tls: bool
   unifi_auth_minutes: int(1,525600)
   hotspot_portal_title: str
+  hotspot_background_color: str
+  hotspot_logo_size: int(64,240)
   telegram_bot_token: password
   telegram_chat_id: str?
   otp_ttl_seconds: int(60,3600)

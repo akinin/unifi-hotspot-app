@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.5
+
+- Move the portal preview from the main product navigation into the Hotspot section.
+- Turn the Portal card icon into the current logo picker and simplify the settings row.
+- Add a portal background color picker and build the existing gradient from that color.
+- Embed the current portal logo in the preview so Home Assistant ingress cannot break its URL.
+- Add a live logo-size slider in the preview and persist the selected size for the real portal.
+
 ## 0.5.4
 
 - Add a safe Hotspot preview tab that renders the real guest login page without allowing SMS requests or access changes.
