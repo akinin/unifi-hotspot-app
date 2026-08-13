@@ -20,7 +20,7 @@ from api.store import Store
 from .audit import build_access_event, record_access_event
 from .routes import _page_request_phone
 from .store import HotspotStore
-from .unifi import UniFiClient, UniFiClientNotFoundError
+from .unifi import UniFiClient, UniFiClientNotFoundError, is_authorized_client
 
 router = APIRouter(prefix="/admin")
 ADMIN_ROOT = "./"
@@ -293,13 +293,14 @@ async def admin_home(
     hotspot_store = HotspotStore(store)
     sessions = hotspot_store.list_active_sessions()
     unifi_clients = await _safe_unifi_clients(settings)
+    active_count = len(_merged_active_records(sessions, unifi_clients))
     message = request.query_params.get("message", "")
     error = request.query_params.get("error", "")
     return HTMLResponse(
         _layout(
             "UniFi",
             _messages(message, error)
-            + _unifi_overview(settings, lang, len(sessions))
+            + _unifi_overview(settings, lang, active_count)
             + _active_table(settings, sessions, unifi_clients, lang),
             active_tab="hotspot",
             lang=lang,
@@ -531,7 +532,12 @@ async def extend_client(
     hotspot_store = HotspotStore(store)
     session = hotspot_store.get_session(client_mac)
     if not session:
-        return _redirect(error="Client was not found", lang=lang, root="../../")
+        minutes = days * 24 * 60
+        try:
+            await UniFiClient(settings).authorize_guest(client_mac, minutes=minutes)
+        except Exception as exc:
+            return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../")
+        return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../")
     now = int(time.time())
     remaining_minutes = max(0, int(session["valid_until"] or now) - now) // 60
     minutes = remaining_minutes + days * 24 * 60
@@ -683,7 +689,7 @@ def send_test_sms(
 
 async def _safe_unifi_clients(settings: Settings) -> dict[str, dict[str, Any]]:
     try:
-        clients = await UniFiClient(settings).list_clients()
+        clients = await UniFiClient(settings).list_clients_cached()
     except Exception:
         return {}
     return {
@@ -928,17 +934,17 @@ def _active_table(
     lang: str,
 ) -> str:
     rows = []
-    for session in sessions:
+    for session in _merged_active_records(sessions, unifi_clients):
         mac = str(session["client_mac"]).lower()
         client = unifi_clients.get(mac, {})
-        phone = str(session["phone"])
+        phone = str(session.get("phone") or "")
         display_name = str(session["display_name"] or client.get("name") or client.get("hostname") or "")
         ip_address = str(client.get("ip") or "")
         search_text = html.escape(f"{display_name} {mac} {phone} {ip_address}".lower(), quote=True)
         rows.append(
             f"<tr data-filter-row data-search='{search_text}'>"
             f"<td data-label='{_t(lang, 'client')}'>{_client_identity(session, client, mac, lang)}</td>"
-            f"<td data-label='{_t(lang, 'phone')}'><div class='value-actions'><span>{html.escape(phone)}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button></div></td>"
+            f"<td data-label='{_t(lang, 'phone')}'>{_phone_value(phone, lang)}</td>"
             f"<td data-label='{_t(lang, 'ip')}'>{html.escape(ip_address)}</td>"
             f"<td data-label='{_t(lang, 'valid_until')}'><strong>{_dt(session['valid_until'])}</strong><small>{_t(lang, 'authorized')}: {_dt(session['authorized_at'])}</small></td>"
             f"<td data-label='{_t(lang, 'actions')}'>{_client_actions(mac, lang)}</td>"
@@ -968,8 +974,40 @@ def _active_table(
     """
 
 
+def _merged_active_records(sessions, unifi_clients: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    records = [dict(session) for session in sessions]
+    known_macs = {str(record["client_mac"]).lower() for record in records}
+    for mac, client in unifi_clients.items():
+        if mac in known_macs or not is_authorized_client(client):
+            continue
+        records.append(
+            {
+                "client_mac": mac,
+                "phone": None,
+                "display_name": client.get("name") or client.get("hostname"),
+                "authorized_at": client.get("authorized_at") or client.get("first_seen"),
+                "valid_until": client.get("guest_authorized_until") or client.get("authorized_until"),
+                "ap_mac": client.get("ap_mac"),
+                "source": "unifi",
+            }
+        )
+    return records
+
+
+def _phone_value(phone: str, lang: str) -> str:
+    if not phone:
+        return "<span class='muted-line'>UniFi</span>"
+    escaped = html.escape(phone)
+    return f"<div class='value-actions'><span>{escaped}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button></div>"
+
+
 def _client_identity(session, client: dict[str, Any], mac: str, lang: str) -> str:
     name = str(session["display_name"] or client.get("name") or client.get("hostname") or "")
+    if session.get("source") == "unifi":
+        return f"""
+    <strong class="client-display-static">{html.escape(name or mac)}</strong>
+    <span class="muted-line"><small>{html.escape(mac)} · UniFi</small><button type="button" class="icon-button copy-button" data-copy="{html.escape(mac, quote=True)}" title="{_t(lang, 'copy')}" aria-label="{_t(lang, 'copy')}">⧉</button></span>
+    """
     return f"""
     <button type="button" class="client-display" title="{_t(lang, 'edit')}">{html.escape(name or mac)}</button>
     <span class="muted-line"><small>{html.escape(mac)}</small><button type="button" class="icon-button copy-button" data-copy="{html.escape(mac, quote=True)}" title="{_t(lang, 'copy')}" aria-label="{_t(lang, 'copy')}">⧉</button></span>
@@ -1390,11 +1428,11 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .actions, .actions form {{ display: flex; flex-wrap: wrap; gap: 6px; }}
           .actions button {{ min-height: 32px; padding: 0 9px; white-space: nowrap; }}
           .client-actions-trigger {{ white-space: nowrap; }}
-          .client-actions-popover {{ position: fixed; inset: auto; width: 230px; margin: 0; padding: 11px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.28); }}
+          .client-actions-popover {{ position: fixed; inset: auto; width: min(260px, calc(100vw - 16px)); max-width: calc(100vw - 16px); margin: 0; padding: 11px; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.28); }}
           .client-actions-popover > strong {{ display: block; margin-bottom: 8px; font-size: 12px; }}
           .client-actions-popover .actions form {{ display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }}
           .client-actions-popover .actions button {{ min-width: 0; padding: 0 5px; }}
-          .client-danger-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }}
+          .client-danger-actions {{ display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }}
           .client-danger-actions .actions, .client-danger-actions form, .client-danger-actions button {{ width: 100%; }}
           .client-display {{ min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text); font-weight: 500; text-align: left; }}
           .client-display:hover {{ color: var(--primary); background: transparent; }}

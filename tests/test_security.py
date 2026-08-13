@@ -13,6 +13,7 @@ from hotspot.admin import (
     _archive_table,
     _layout,
     _messages,
+    _merged_active_records,
     _portal_preview,
     _portal_preview_content,
     _redirect,
@@ -254,6 +255,52 @@ def test_active_clients_use_compact_action_popover() -> None:
     assert "Продлить" in page
     assert "Отозвать" in page
     assert "Блокировать" in page
+
+
+def test_active_clients_include_existing_unifi_authorizations(monkeypatch, tmp_path) -> None:
+    async def list_clients(_self):
+        return [
+            {
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "ip": "10.10.10.25",
+                "hostname": "Already connected",
+                "authorized": True,
+            },
+            {
+                "mac": "aa:bb:cc:dd:ee:00",
+                "hostname": "Not authorized",
+                "authorized": False,
+            },
+        ]
+
+    monkeypatch.setattr(UniFiClient, "list_clients_cached", list_clients)
+    store = Store(str(tmp_path / "hotspot.sqlite3"))
+
+    result = asyncio.run(active_clients(settings=Settings(), store=store))
+
+    assert result["count"] == 1
+    assert result["clients"][0]["source"] == "unifi"
+    assert result["clients"][0]["phone"] is None
+    assert result["clients"][0]["name"] == "Already connected"
+
+
+def test_imported_unifi_client_has_compact_actions_and_no_fake_phone() -> None:
+    clients = {
+        "aa:bb:cc:dd:ee:ff": {
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "hostname": "Imported guest",
+            "authorized": True,
+        }
+    }
+
+    records = _merged_active_records([], clients)
+    page = _active_table(Settings(app_role="admin"), [], clients, "ru")
+
+    assert len(records) == 1
+    assert "Imported guest" in page
+    assert "· UniFi" in page
+    assert "+1d" in page
+    assert ">None<" not in page
 
 
 def test_sms_store_records_delivery_history(tmp_path) -> None:
