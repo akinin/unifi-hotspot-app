@@ -18,7 +18,10 @@ def require_api_token(
 ) -> None:
     expected = settings.api_token.get_secret_value() if settings.api_token else None
     if not expected:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API token is not configured",
+        )
     if authorization not in (expected, f"Bearer {expected}"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
 

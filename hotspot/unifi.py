@@ -49,6 +49,8 @@ class UniFiClient:
         minutes: Optional[int] = None,
         ap_mac: Optional[str] = None,
     ) -> None:
+        if self.settings.unifi_dry_run:
+            return
         self._check_configuration()
 
         auth_minutes = minutes or self.settings.unifi_auth_minutes
@@ -129,6 +131,8 @@ class UniFiClient:
         return None
 
     async def unauthorize_guest(self, client_mac: str) -> None:
+        if self.settings.unifi_dry_run:
+            return
         self._check_configuration()
         async with httpx.AsyncClient(**self._client_options()) as client:
             if self._uses_api_key:
@@ -144,6 +148,8 @@ class UniFiClient:
             )
 
     async def block_client(self, client_mac: str) -> None:
+        if self.settings.unifi_dry_run:
+            return
         self._check_configuration()
         if self._uses_api_key:
             raise RuntimeError(

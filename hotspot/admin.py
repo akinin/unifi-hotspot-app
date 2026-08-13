@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 
 from api.config import Settings, get_settings
 from api.deps import get_store
@@ -21,6 +21,8 @@ from .store import HotspotStore
 from .unifi import UniFiClient, UniFiClientNotFoundError
 
 router = APIRouter(prefix="/admin")
+ADMIN_ROOT = "./"
+LOGO_PATH = Path(__file__).with_name("assets") / "ahs.png"
 
 TEXT = {
     "en": {
@@ -150,6 +152,12 @@ def admin_archive(
     )
 
 
+@router.get("/logo")
+def admin_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
+    logo_path = Path(settings.hotspot_logo_path)
+    return FileResponse(logo_path if logo_path.exists() else LOGO_PATH)
+
+
 @router.get("/archive.csv")
 def export_archive_csv(
     settings: Settings = Depends(require_admin),
@@ -187,11 +195,11 @@ async def extend_client(
     store: Store = Depends(get_store),
 ):
     if days not in (1, 2, 7, 365):
-        return _redirect(error="Invalid duration", lang=lang)
+        return _redirect(error="Invalid duration", lang=lang, root="../../")
     hotspot_store = HotspotStore(store)
     session = hotspot_store.get_session(client_mac)
     if not session:
-        return _redirect(error="Client was not found", lang=lang)
+        return _redirect(error="Client was not found", lang=lang, root="../../")
     now = int(time.time())
     remaining_minutes = max(0, int(session["valid_until"] or now) - now) // 60
     minutes = remaining_minutes + days * 24 * 60
@@ -204,7 +212,7 @@ async def extend_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang)
+        return _redirect(error=f"UniFi authorize failed: {exc}", lang=lang, root="../../")
     authorized_at = hotspot_store.mark_authorized(client_mac, minutes)
     session = hotspot_store.get_session(client_mac)
     record_access_event(
@@ -217,7 +225,7 @@ async def extend_client(
             session["valid_until"],
         ),
     )
-    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang)
+    return _redirect(message=f"Authorization extended for {days} day(s)", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/revoke")
@@ -232,9 +240,9 @@ async def revoke_client(
     except UniFiClientNotFoundError:
         pass
     except Exception as exc:
-        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang)
+        return _redirect(error=f"UniFi revoke failed: {exc}", lang=lang, root="../../")
     HotspotStore(store).clear_authorized(client_mac)
-    return _redirect(message="Authorization revoked", lang=lang)
+    return _redirect(message="Authorization revoked", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/name")
@@ -246,8 +254,8 @@ def update_client_name(
     store: Store = Depends(get_store),
 ):
     if not HotspotStore(store).set_display_name(client_mac, display_name):
-        return _redirect(error="Client was not found", lang=lang)
-    return _redirect(message="Client name updated", lang=lang)
+        return _redirect(error="Client was not found", lang=lang, root="../../")
+    return _redirect(message="Client name updated", lang=lang, root="../../")
 
 
 @router.post("/clients/{client_mac}/block")
@@ -260,9 +268,9 @@ async def block_client(
     try:
         await UniFiClient(settings).block_client(client_mac)
     except Exception as exc:
-        return _redirect(error=f"UniFi block failed: {exc}", lang=lang)
+        return _redirect(error=f"UniFi block failed: {exc}", lang=lang, root="../../")
     HotspotStore(store).mark_blocked(client_mac, "Blocked from admin")
-    return _redirect(message="Client blocked", lang=lang)
+    return _redirect(message="Client blocked", lang=lang, root="../../")
 
 
 @router.post("/settings")
@@ -273,16 +281,17 @@ async def update_settings(
     settings: Settings = Depends(require_admin),
 ):
     title = title.strip()[:120] or "Welcome"
-    _set_env_value(Path(".env"), "HOTSPOT_PORTAL_TITLE", title)
+    settings_path = Path(settings.settings_file_path)
+    _set_env_value(settings_path, "HOTSPOT_PORTAL_TITLE", title)
     if logo and logo.filename:
         suffix = Path(logo.filename).suffix.lower()
         if suffix not in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
             return _redirect(error="Unsupported logo format", lang=lang)
-        logo_path = Path("./data") / f"hotspot_logo{suffix}"
+        logo_path = settings_path.parent / f"hotspot_logo{suffix}"
         logo_path.parent.mkdir(parents=True, exist_ok=True)
         with logo_path.open("wb") as output:
             shutil.copyfileobj(logo.file, output)
-        _set_env_value(Path(".env"), "HOTSPOT_LOGO_PATH", str(logo_path))
+        _set_env_value(settings_path, "HOTSPOT_LOGO_PATH", str(logo_path))
     get_settings.cache_clear()
     return _redirect(message=_t(lang, "portal_saved"), lang=lang)
 
@@ -342,13 +351,18 @@ def _t(lang: str, key: str) -> str:
     return TEXT.get(lang, TEXT["en"]).get(key, key)
 
 
-def _redirect(message: str = "", error: str = "", lang: str = "en") -> RedirectResponse:
+def _redirect(
+    message: str = "",
+    error: str = "",
+    lang: str = "en",
+    root: str = ADMIN_ROOT,
+) -> RedirectResponse:
     suffix = f"lang={_url(lang if lang in TEXT else 'en')}"
     if error:
-        return RedirectResponse(f"/admin/?{suffix}&error={_url(error)}", status_code=303)
+        return RedirectResponse(f"{root}?{suffix}&error={_url(error)}", status_code=303)
     if message:
-        return RedirectResponse(f"/admin/?{suffix}&message={_url(message)}", status_code=303)
-    return RedirectResponse(f"/admin/?{suffix}", status_code=303)
+        return RedirectResponse(f"{root}?{suffix}&message={_url(message)}", status_code=303)
+    return RedirectResponse(f"{root}?{suffix}", status_code=303)
 
 
 def _url(value: str) -> str:
@@ -370,14 +384,14 @@ def _settings_form(settings: Settings, lang: str, active_tab: str) -> str:
     return f"""
     <section>
       <div class="section-head"><h2>{_t(lang, "portal")}</h2></div>
-      <form class="settings" method="post" action="/admin/settings" enctype="multipart/form-data">
+      <form class="settings" method="post" action="settings" enctype="multipart/form-data">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
         <label>{_t(lang, "welcome_text")}<input name="title" value="{title}" maxlength="120"></label>
         <label class="logo-picker" title="{_t(lang, 'choose_file')}">
           <span>{_t(lang, "logo")}</span>
           <span class="logo-preview">
             <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-            <img id="logo-preview" src="/assets/hotspot-logo" alt="{_t(lang, 'logo')}">
+            <img id="logo-preview" src="logo" alt="{_t(lang, 'logo')}">
           </span>
         </label>
         <button class="save-button" type="submit">{_t(lang, "save")}</button>
@@ -390,7 +404,7 @@ def _test_sms_form(lang: str) -> str:
     return f"""
     <section>
       <h2>{_t(lang, "test_sms")}</h2>
-      <form class="test-sms" method="post" action="/admin/test-sms">
+      <form class="test-sms" method="post" action="test-sms">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
         <label>{_t(lang, "phone")}<input name="phone" type="tel" placeholder="+79991234567" required></label>
         <label>{_t(lang, "message")}<input name="message" maxlength="1000" required></label>
@@ -449,7 +463,7 @@ def _client_identity(session, client: dict[str, Any], mac: str, lang: str) -> st
     return f"""
     <button type="button" class="client-display" title="{_t(lang, 'edit')}">{html.escape(name or mac)}</button>
     <small>{html.escape(mac)}</small>
-    <form class="client-name" method="post" action="/admin/clients/{html.escape(mac)}/name" hidden>
+    <form class="client-name" method="post" action="clients/{html.escape(mac)}/name" hidden>
       <input type="hidden" name="lang" value="{html.escape(lang)}">
       <input name="display_name" value="{html.escape(name)}" maxlength="120" placeholder="{_t(lang, 'name')}">
     </form>
@@ -463,7 +477,7 @@ def _extend_actions(mac: str, lang: str = "en") -> str:
     )
     return f"""
     <div class="actions">
-      <form method="post" action="/admin/clients/{html.escape(mac)}/extend"><input type="hidden" name="lang" value="{html.escape(lang)}">{options}</form>
+      <form method="post" action="clients/{html.escape(mac)}/extend"><input type="hidden" name="lang" value="{html.escape(lang)}">{options}</form>
     </div>
     """
 
@@ -471,7 +485,7 @@ def _extend_actions(mac: str, lang: str = "en") -> str:
 def _revoke_actions(mac: str, lang: str = "en") -> str:
     return f"""
     <div class="actions">
-      <form method="post" action="/admin/clients/{html.escape(mac)}/revoke"><input type="hidden" name="lang" value="{html.escape(lang)}"><button>{_t(lang, "revoke")}</button></form>
+      <form method="post" action="clients/{html.escape(mac)}/revoke"><input type="hidden" name="lang" value="{html.escape(lang)}"><button>{_t(lang, "revoke")}</button></form>
     </div>
     """
 
@@ -479,7 +493,7 @@ def _revoke_actions(mac: str, lang: str = "en") -> str:
 def _block_action(mac: str, lang: str = "en") -> str:
     return f"""
     <div class="actions">
-      <form method="post" action="/admin/clients/{html.escape(mac)}/block"><input type="hidden" name="lang" value="{html.escape(lang)}"><button class="danger">{_t(lang, "block")}</button></form>
+      <form method="post" action="clients/{html.escape(mac)}/block"><input type="hidden" name="lang" value="{html.escape(lang)}"><button class="danger">{_t(lang, "block")}</button></form>
     </div>
     """
 
@@ -502,7 +516,7 @@ def _archive_table(rows, lang: str) -> str:
     body = "\n".join(table_rows) if table_rows else f"<tr><td colspan='6' class='empty'>{_t(lang, 'empty_archive')}</td></tr>"
     return f"""
     <section>
-      <div class="section-head"><h2>{_t(lang, "archive")}</h2><div class="table-tools"><a class="export-button" href="/admin/archive.csv">{_t(lang, "export_csv")}</a>{_tabs(lang, "archive")}</div></div>
+      <div class="section-head"><h2>{_t(lang, "archive")}</h2><div class="table-tools"><a class="export-button" href="archive.csv">{_t(lang, "export_csv")}</a>{_tabs(lang, "archive")}</div></div>
       <table>
         <thead>
           <tr><th>{_t(lang, "client")}</th><th>{_t(lang, "phone")}</th><th>{_t(lang, "authorized")}</th><th>{_t(lang, "valid_until")}</th><th>{_t(lang, "duration")}</th><th>{_t(lang, "status")}</th></tr>
@@ -567,8 +581,8 @@ def _tabs(lang: str, active_tab: str) -> str:
     archive = "class='active'" if active_tab == "archive" else ""
     return f"""
     <nav class="tabs">
-      <a href="/admin/?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
-      <a href="/admin/archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
+      <a href="./?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
+      <a href="archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
     </nav>
     """
 
@@ -582,7 +596,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="icon" href="/assets/hotspot-logo">
+        <link rel="icon" href="logo">
         <title>{html.escape(title)} - SMS Gateway Admin</title>
         <script>
           const savedTheme = localStorage.getItem("sms-theme");
