@@ -1,0 +1,51 @@
+configuration:
+  api_token:
+    name: Токен API
+    description: Обязательный Bearer-токен для защищённых методов HTTP API.
+  app_secret:
+    name: Секрет OTP
+    description: Оставьте пустым для автоматической генерации и сохранения секрета.
+  wb_mqtt_host:
+    name: Адрес MQTT
+  wb_mqtt_port:
+    name: Порт MQTT
+  wb_mqtt_username:
+    name: Пользователь MQTT
+  wb_mqtt_password:
+    name: Пароль MQTT
+  wb_sms_topic:
+    name: Топик отправки SMS
+  unifi_dry_run:
+    name: Тестовый режим UniFi
+    description: Запрещает авторизацию, отзыв доступа и блокировку клиентов.
+  unifi_base_url:
+    name: Адрес UniFi
+  unifi_api_key:
+    name: API-ключ UniFi
+  unifi_username:
+    name: Локальный пользователь UniFi
+  unifi_password:
+    name: Локальный пароль UniFi
+  unifi_site:
+    name: Сайт UniFi
+  unifi_verify_tls:
+    name: Проверять TLS-сертификат UniFi
+  unifi_auth_minutes:
+    name: Длительность гостевого доступа
+  hotspot_portal_title:
+    name: Заголовок портала
+  telegram_bot_token:
+    name: Токен Telegram-бота
+  telegram_chat_id:
+    name: ID чата Telegram
+  otp_ttl_seconds:
+    name: Срок действия OTP
+  otp_length:
+    name: Длина OTP
+  otp_resend_seconds:
+    name: Задержка повторной отправки
+  otp_max_attempts:
+    name: Максимум попыток OTP
+network:
+  8088/tcp: API отправки SMS
+  8880/tcp: Гостевой портал UniFi

@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+. /usr/lib/sms-gateway/load-options.sh
+export APP_ROLE=admin HOTSPOT_ADMIN_PORT=8089
+exec python3 -m api

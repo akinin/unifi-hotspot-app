@@ -1,0 +1,43 @@
+name: Home Assistant App image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: app
+        shell: bash
+        run: |
+          version=$(sed -n 's/^version: "\(.*\)"/\1/p' home-assistant-app/config.yaml)
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./home-assistant-app/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ghcr.io/akinin/wirenboard-sms-app:${{ steps.app.outputs.version }}
+            ghcr.io/akinin/wirenboard-sms-app:latest
+          labels: |
+            io.hass.type=app
+            io.hass.name=Wiren Board SMS Gateway
+            org.opencontainers.image.source=https://github.com/akinin/wirenboard-sms

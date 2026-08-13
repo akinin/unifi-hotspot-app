@@ -1,4 +1,5 @@
 from functools import lru_cache
+import os
 from typing import Optional
 
 from pydantic import Field, SecretStr
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     app_port: int = 8088
     app_role: str = "api"
     database_path: str = "./data/sms_gateway.sqlite3"
+    settings_file_path: str = ".env"
 
     wb_mqtt_host: str = "127.0.0.1"
     wb_mqtt_port: int = 1883
@@ -31,6 +33,7 @@ class Settings(BaseSettings):
     unifi_site: str = "default"
     unifi_verify_tls: bool = False
     unifi_auth_minutes: int = 1440
+    unifi_dry_run: bool = False
 
     hotspot_portal_port: int = 8880
     hotspot_admin_port: int = 8089
@@ -50,4 +53,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=os.environ.get("SETTINGS_FILE_PATH", ".env"))
