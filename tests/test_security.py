@@ -14,7 +14,6 @@ from hotspot.admin import (
     _layout,
     _portal_preview,
     _portal_preview_content,
-    _portal_summary,
     _redirect,
     _sms_log_table,
     _tabs,
@@ -65,10 +64,6 @@ def test_unifi_dry_run_does_not_require_credentials_or_network() -> None:
 
 
 def test_admin_markup_uses_ingress_safe_relative_links() -> None:
-    settings = Settings(app_role="admin")
-
-    assert 'href="preview?lang=en"' in _portal_summary(settings, "en")
-    assert 'src="logo"' in _portal_summary(settings, "en")
     assert 'href="./?lang=en"' in _tabs("en", "active")
     assert 'href="archive.csv"' in _archive_table([], "en")
     assert _redirect(message="done", root="../../").headers["location"].startswith("../../?")
@@ -114,13 +109,15 @@ def test_hotspot_preview_is_responsive_and_safe() -> None:
     assert 'name="background"' in workspace
     assert 'name="logo_size"' in workspace
     assert "class='active'" in _tabs("ru", "preview")
-    assert 'src="data:image/png;base64,' in content
+    assert 'src="content/logo?v=' in content
     assert "autofocus" not in content
     assert "Wi-Fi вход" in content
     assert "background-image: radial-gradient" in content
     assert "width: 164px" in content
     assert "fetch(" not in content
     assert 'data.type !== "portal-preview"' in content
+    assert "Активные" not in workspace
+    assert "Архив" not in workspace
 
 
 def test_hotspot_designer_persists_all_appearance_settings(tmp_path) -> None:
@@ -160,6 +157,9 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert "API key" in page
     assert "secret-key" not in page
     assert 'src="unifi-logo"' in page
+    assert page.count('class="ha-card hotspot-overview-card"') == 1
+    assert 'class="portal-overview-pane"' in page
+    assert 'class="connection-overview-pane"' in page
 
 
 def test_usb_backend_uses_supplied_usb_branding() -> None:
