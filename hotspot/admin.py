@@ -17,6 +17,7 @@ from api.sms import SmsSender
 from api.store import Store
 
 from .audit import build_access_event, record_access_event
+from .routes import _page_request_phone
 from .store import HotspotStore
 from .unifi import UniFiClient, UniFiClientNotFoundError
 
@@ -120,6 +121,12 @@ TEXT = {
         "sms_gateway": "SMS Gateway",
         "usb_modem": "USB modem",
         "usb_help": "ModemManager sends SMS directly through the selected USB modem.",
+        "preview": "Preview",
+        "preview_title": "Hotspot page preview",
+        "preview_help": "Check the guest login page without sending an SMS or changing client access.",
+        "mobile": "Mobile",
+        "desktop": "Wide",
+        "reload_preview": "Refresh preview",
     },
     "ru": {
         "active": "Активные",
@@ -213,6 +220,12 @@ TEXT = {
         "sms_gateway": "SMS Gateway",
         "usb_modem": "USB-модем",
         "usb_help": "ModemManager отправляет SMS напрямую через выбранный USB-модем.",
+        "preview": "Просмотр",
+        "preview_title": "Предпросмотр страницы Hotspot",
+        "preview_help": "Проверьте страницу входа для гостей без отправки SMS и изменения доступа клиента.",
+        "mobile": "Телефон",
+        "desktop": "Широко",
+        "reload_preview": "Обновить предпросмотр",
     },
 }
 
@@ -274,6 +287,41 @@ async def admin_usb(
     store: Store = Depends(get_store),
 ) -> HTMLResponse:
     return _sms_workspace(request, settings, store, "mmcli", "usb")
+
+
+@router.get("/preview", response_class=HTMLResponse)
+def admin_preview(
+    request: Request,
+    settings: Settings = Depends(require_admin),
+) -> HTMLResponse:
+    lang = _lang(request)
+    return HTMLResponse(
+        _layout(
+            _t(lang, "preview"),
+            _portal_preview(lang),
+            active_tab="preview",
+            lang=lang,
+            sms_backend=settings.sms_backend,
+        )
+    )
+
+
+@router.get("/preview/content", response_class=HTMLResponse)
+def admin_preview_content(
+    request: Request,
+    settings: Settings = Depends(require_admin),
+) -> HTMLResponse:
+    return HTMLResponse(_portal_preview_content(_lang(request)))
+
+
+def _portal_preview_content(lang: str) -> str:
+    page = _page_request_phone("", "", "", "", lang)
+    # Keep image requests inside the Home Assistant ingress path. The iframe is
+    # sandboxed by the parent view, so its forms and scripts cannot run.
+    page = page.replace('"/assets/hotspot-logo"', '"../logo"')
+    page = page.replace('"/assets/ahs.png"', '"../logo"')
+    page = page.replace(" required autofocus", " required")
+    return page
 
 
 def _sms_workspace(
@@ -975,10 +1023,14 @@ def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
     wb_active = "class='active'" if active_tab == "wb" else ""
     usb_active = "class='active'" if active_tab == "usb" else ""
     hotspot_active = "class='active'" if active_tab == "hotspot" else ""
+    preview_active = "class='active'" if active_tab == "preview" else ""
     return f"""
     <nav class="product-nav" aria-label="Products">
       <a href="./?lang={html.escape(lang)}" {hotspot_active}>
         <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>{_t(lang, 'hotspot')}</span>
+      </a>
+      <a href="preview?lang={html.escape(lang)}" {preview_active}>
+        <span class="nav-mark preview-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span><span>{_t(lang, 'preview')}</span>
       </a>
       <a href="wb?lang={html.escape(lang)}" {wb_active}>
         <span class="nav-mark sms-mark"><img src="wb-logo" alt=""></span><span>WB</span>
@@ -987,6 +1039,29 @@ def _product_nav(lang: str, active_tab: str, sms_backend: str) -> str:
         <span class="nav-mark sms-mark"><img src="usb-logo" alt=""></span><span>USB</span>
       </a>
     </nav>
+    """
+
+
+def _portal_preview(lang: str) -> str:
+    return f"""
+    <section class="ha-card preview-card">
+      <div class="section-head card-heading preview-heading">
+        <div class="section-title">
+          <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5c5.5 0 9.5 5.1 10.7 6.8a.4.4 0 0 1 0 .4C21.5 13.9 17.5 19 12 19S2.5 13.9 1.3 12.2a.4.4 0 0 1 0-.4C2.5 10.1 6.5 5 12 5Zm0 2c-3.6 0-6.6 2.9-8.5 5 1.9 2.1 4.9 5 8.5 5s6.6-2.9 8.5-5C18.6 9.9 15.6 7 12 7Zm0 2.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/></svg></span>
+          <div><h2>{_t(lang, 'preview_title')}</h2><p>{_t(lang, 'preview_help')}</p></div>
+        </div>
+        <div class="preview-tools" role="group" aria-label="{_t(lang, 'preview')}">
+          <button type="button" class="secondary-button preview-size active" data-preview-width="390" aria-pressed="true">{_t(lang, 'mobile')}</button>
+          <button type="button" class="secondary-button preview-size" data-preview-width="760" aria-pressed="false">{_t(lang, 'desktop')}</button>
+          <button type="button" class="secondary-button preview-reload" title="{_t(lang, 'reload_preview')}" aria-label="{_t(lang, 'reload_preview')}">↻</button>
+        </div>
+      </div>
+      <div class="preview-stage">
+        <div class="preview-device" style="--preview-width: 390px">
+          <iframe id="hotspot-preview" src="preview/content?lang={html.escape(lang)}" title="{_t(lang, 'preview_title')}" sandbox=""></iframe>
+        </div>
+      </div>
+    </section>
     """
 
 
@@ -1026,12 +1101,14 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
           .language a.active {{ color: #fff; background: var(--primary); }}
           main {{ max-width: 1280px; margin: 0 auto; padding: 16px 16px 32px; }}
-          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 148px)); gap: 10px; }}
+          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 148px)); gap: 10px; }}
           .product-nav a {{ min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 15px; font-weight: 600; transition: border-color .15s, background .15s; }}
           .product-nav a:hover {{ border-color: var(--primary); }}
           .product-nav a.active {{ border-color: var(--primary); background: rgba(3,169,244,.09); color: var(--primary); }}
           .nav-mark {{ width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }}
           .nav-mark img {{ display: block; object-fit: contain; }}
+          .preview-mark {{ border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
+          .preview-mark svg {{ width: 19px; height: 19px; fill: currentColor; }}
           .wb-mark img {{ width: 30px; height: 30px; }}
           .sms-mark img {{ width: 30px; height: 30px; object-fit: contain; border-radius: 7px; }}
           .transport-mark {{ width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; border-radius: 9px; }}
@@ -1044,6 +1121,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .side-stack {{ min-width: 0; display: grid; align-content: start; gap: 12px; }}
           .side-stack .ha-card {{ margin: 0; }}
           .unifi-grid .ha-card {{ height: 100%; }}
+          .preview-heading {{ flex-wrap: wrap; }}
+          .preview-tools {{ display: flex; align-items: center; gap: 6px; margin-left: auto; }}
+          .preview-tools .active {{ border-color: var(--primary); background: rgba(3,169,244,.1); }}
+          .preview-reload {{ width: 34px; padding: 0; font-size: 19px; }}
+          .preview-stage {{ min-height: 650px; overflow: auto; padding: 18px; background: var(--surface-2); }}
+          .preview-device {{ width: min(100%, var(--preview-width)); height: 610px; margin: 0 auto; overflow: hidden; border: 8px solid #20242a; border-radius: 22px; background: #07090d; box-shadow: 0 12px 32px rgba(0,0,0,.22); transition: width .2s ease; }}
+          .preview-device iframe {{ width: 100%; height: 100%; display: block; border: 0; background: #07090d; }}
           .ha-card {{ min-width: 0; margin: 0 0 12px; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }}
           .dashboard-grid .ha-card {{ margin-bottom: 0; }}
           .card-heading {{ display: flex; align-items: center; gap: 10px; padding: 11px 14px 8px; }}
@@ -1152,7 +1236,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
           @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} .portal-settings {{ grid-template-columns: minmax(200px, 1fr) auto auto; }} }}
           @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .portal-settings {{ grid-template-columns: minmax(0, 1fr) auto; }} .portal-settings .field {{ grid-column: 1 / -1; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .product-nav a {{ min-height: 44px; font-size: 13px; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(2, 1fr); }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
         </style>
       </head>
       <body>
@@ -1223,6 +1307,21 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           }}
           if (smsMessage) smsMessage.addEventListener("input", updateMessageCounter);
           updateMessageCounter();
+          const previewDevice = document.querySelector(".preview-device");
+          const previewFrame = document.getElementById("hotspot-preview");
+          document.querySelectorAll("[data-preview-width]").forEach((button) => {{
+            button.addEventListener("click", () => {{
+              previewDevice.style.setProperty("--preview-width", `${{button.dataset.previewWidth}}px`);
+              document.querySelectorAll("[data-preview-width]").forEach((item) => {{
+                const active = item === button;
+                item.classList.toggle("active", active);
+                item.setAttribute("aria-pressed", String(active));
+              }});
+            }});
+          }});
+          document.querySelector(".preview-reload")?.addEventListener("click", () => {{
+            previewFrame.src = previewFrame.src;
+          }});
           document.querySelectorAll("[data-filter-input]").forEach((input) => {{
             const tableName = input.dataset.filterInput;
             const table = document.querySelector(`[data-filter-table="${{tableName}}"]`);

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.4
+
+- Add a safe Hotspot preview tab that renders the real guest login page without allowing SMS requests or access changes.
+- Add compact mobile and wide preview modes with an explicit refresh action.
+
 ## 0.5.3
 
 - Run ModemManager at normal log level to avoid filling the app log with virtual TTY discovery details.
