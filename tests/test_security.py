@@ -12,6 +12,7 @@ from hotspot.admin import (
     _active_table,
     _archive_table,
     _layout,
+    _messages,
     _portal_preview,
     _portal_preview_content,
     _redirect,
@@ -44,6 +45,14 @@ def test_missing_api_token_keeps_protected_api_closed() -> None:
         require_api_token(settings=settings, authorization=None)
 
     assert error.value.status_code == 503
+
+
+def test_success_notice_uses_visible_svg_checkmark() -> None:
+    notice = _messages("Test SMS sent", "")
+
+    assert "<svg viewBox='0 0 24 24'" in notice
+    assert "M5 12.5 9.25 17 19 7" in notice
+    assert ">✓<" not in notice
 
 
 def test_configured_api_token_is_required() -> None:
@@ -162,6 +171,9 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
     assert 'class="hotspot-overview-groups"' in page
     assert page.count('class="overview-group') >= 3
     assert "hotspot-overview-grid" not in page
+    assert "<h3>Appearance</h3>" not in page
+    assert 'class="secondary-button portal-preview-button"' in page
+    assert page.count('href="preview?lang=en"') == 1
     assert 'action="settings/access-days"' in page
     assert 'value="1"' in page
     assert "Active guests</dt><dd>3" in page
