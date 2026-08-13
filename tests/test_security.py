@@ -78,7 +78,7 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     page = _layout(
         "UniFi Hotspot",
         _wb_overview(settings, "en") + _sms_log_table([], "en"),
-        "sms",
+        "wb",
         "en",
     )
 
@@ -90,7 +90,9 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     assert 'class="toast"' in page
     assert 'src="wb-logo"' in page
     assert 'href="./?lang=en"' in page
-    assert 'href="sms?lang=en"' in page
+    assert 'href="wb?lang=en"' in page
+    assert 'href="usb?lang=en"' in page
+    assert 'name="backend" value="mqtt"' in page
     assert 'class="nav-mark unifi-mark"' in page
     assert "#0559C9" in page
 
@@ -114,9 +116,9 @@ def test_unifi_workspace_shows_connection_state_without_secrets() -> None:
 def test_usb_backend_uses_supplied_usb_branding() -> None:
     settings = Settings(app_role="admin", sms_backend="mmcli", mmcli_modem_id="any")
     page = _layout(
-        "SMS Gateway",
+        "USB",
         _wb_overview(settings, "en"),
-        "sms",
+        "usb",
         "en",
         settings.sms_backend,
     )
@@ -125,6 +127,7 @@ def test_usb_backend_uses_supplied_usb_branding() -> None:
     assert "USB / ModemManager" in page
     assert "MMCLI" in page
     assert "Required WB script" not in page
+    assert 'name="backend" value="mmcli"' in page
 
 
 def test_active_clients_use_compact_action_popover() -> None:
