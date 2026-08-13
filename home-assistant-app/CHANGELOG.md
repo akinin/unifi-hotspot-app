@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Fix the Home Assistant Ingress entry path so the administration interface opens without a double slash.
+
 ## 0.2.1
 
 - Replace the application icon and logo with the official Wiren Board artwork.
