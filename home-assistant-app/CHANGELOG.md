@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Redesign the administration interface to match Home Assistant cards, colors, spacing, and responsive behavior.
+- Add live client and archive search with result counters.
+- Add quick SMS recipient selection, copy actions, message length counter, refresh controls, and an in-app confirmation dialog for destructive actions.
+
 ## 0.2.3
 
 - Document the mandatory Wiren Board `send_sms.js` rule and include the script in the repository.
