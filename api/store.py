@@ -43,8 +43,21 @@ class Store:
                     backend TEXT NOT NULL,
                     status TEXT NOT NULL,
                     error TEXT,
-                    created_at INTEGER NOT NULL
+                    created_at INTEGER NOT NULL,
+                    event_key TEXT
                 )
+                """
+            )
+            sms_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(sms_log)").fetchall()
+            }
+            if "event_key" not in sms_columns:
+                conn.execute("ALTER TABLE sms_log ADD COLUMN event_key TEXT")
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_log_event_key
+                ON sms_log(event_key)
+                WHERE event_key IS NOT NULL
                 """
             )
 
@@ -55,14 +68,26 @@ class Store:
         backend: str,
         status: str,
         error: Optional[str] = None,
+        created_at: Optional[int] = None,
+        event_key: Optional[str] = None,
     ) -> None:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO sms_log(phone, message, backend, status, error, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO sms_log(
+                    phone, message, backend, status, error, created_at, event_key
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (phone, message, backend, status, error, int(time.time())),
+                (
+                    phone,
+                    message,
+                    backend,
+                    status,
+                    error,
+                    created_at or int(time.time()),
+                    event_key,
+                ),
             )
 
     def list_sms_log(self, limit: int = 500) -> list[sqlite3.Row]:

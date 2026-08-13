@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import Depends, FastAPI, HTTPException
 
 from .config import Settings, get_settings
@@ -12,10 +14,31 @@ from .models import (
 )
 from .otp import OtpService
 from .sms import SmsSender
+from .sms_monitor import WBSmsMonitor
+from .store import Store
 from hotspot.admin import router as admin_router
+from hotspot.api import router as unifi_api_router
 from hotspot.routes import router as hotspot_router
 
 app = FastAPI(title="SMS Gateway API", version="0.1.0")
+sms_monitor: Optional[WBSmsMonitor] = None
+
+
+@app.on_event("startup")
+def start_sms_monitor() -> None:
+    global sms_monitor
+    settings = get_settings()
+    if settings.app_role == "admin" and settings.sms_backend == "mqtt":
+        sms_monitor = WBSmsMonitor(settings, Store(settings.database_path))
+        sms_monitor.start()
+
+
+@app.on_event("shutdown")
+def stop_sms_monitor() -> None:
+    global sms_monitor
+    if sms_monitor is not None:
+        sms_monitor.stop()
+        sms_monitor = None
 
 
 @app.get("/health")
@@ -57,4 +80,5 @@ def verify_otp(payload: OtpVerifyRequest, service: OtpService = Depends(get_otp_
 
 
 app.include_router(hotspot_router)
+app.include_router(unifi_api_router)
 app.include_router(admin_router)

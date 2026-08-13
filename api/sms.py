@@ -23,7 +23,11 @@ class SmsSender:
         except Exception as exc:
             self._record(phone, message, "failed", str(exc))
             raise
-        self._record(phone, message, "sent")
+        # MQTT deliveries are recorded from the confirmation fields published
+        # by send_sms.js on Wiren Board. This covers every producer, including
+        # wirenboard-discovery, without duplicating successful rows here.
+        if self.settings.sms_backend != "mqtt":
+            self._record(phone, message, "sent")
 
     def _record(
         self,

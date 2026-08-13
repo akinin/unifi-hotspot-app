@@ -201,6 +201,22 @@ defineRule("send_sms_via_notify", {
 
         dev["sms_sender"]["send"] = "";
 
+        /*
+         * Публикуем данные попытки до вызова модема. Приложение SMS Gateway
+         * подписано на эти контролы и записывает подтверждённый результат
+         * независимо от того, кто создал команду: Home Assistant, портал
+         * или тестовая форма.
+         */
+
+        dev["sms_sender"]["last_sent_time"] =
+            new Date().toISOString();
+
+        dev["sms_sender"]["last_message_text"] =
+            messageText;
+
+        dev["sms_sender"]["last_recipient_number"] =
+            phoneNumber;
+
         try {
             log(
                 "SMS: передаём команду для номера " +
@@ -211,17 +227,6 @@ defineRule("send_sms_via_notify", {
                 phoneNumber,
                 messageText
             );
-
-            var currentTime = new Date().toISOString();
-
-            dev["sms_sender"]["last_sent_time"] =
-                currentTime;
-
-            dev["sms_sender"]["last_message_text"] =
-                messageText;
-
-            dev["sms_sender"]["last_recipient_number"] =
-                phoneNumber;
 
             setLastResult(
                 "Команда отправки передана"

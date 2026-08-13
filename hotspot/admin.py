@@ -23,7 +23,8 @@ from .unifi import UniFiClient, UniFiClientNotFoundError
 router = APIRouter(prefix="/admin")
 ADMIN_ROOT = "./"
 LOGO_PATH = Path(__file__).with_name("assets") / "ahs.png"
-WB_LOGO_PATH = Path(__file__).with_name("assets") / "wb.png"
+WB_LOGO_PATH = Path(__file__).with_name("assets") / "wb.svg"
+UNIFI_LOGO_PATH = Path(__file__).with_name("assets") / "unifi.svg"
 WB_SCRIPT_PATH = Path(__file__).parent.parent / "wirenboard" / "send_sms.js"
 
 TEXT = {
@@ -101,6 +102,18 @@ TEXT = {
         "sent": "Sent",
         "failed": "Failed",
         "unifi_help": "Guest portal settings, active clients and authorization archive.",
+        "connection_mode": "Mode",
+        "dry_run": "Dry-run",
+        "live_mode": "Live",
+        "base_url": "Controller",
+        "site": "Site",
+        "auth_duration": "Guest access",
+        "minutes": "minutes",
+        "credentials": "Credentials",
+        "api_key": "API key",
+        "local_account": "Local account",
+        "not_configured": "Not configured",
+        "unifi_connection_help": "Current controller connection settings.",
     },
     "ru": {
         "active": "Активные",
@@ -176,6 +189,18 @@ TEXT = {
         "sent": "Отправлено",
         "failed": "Ошибка",
         "unifi_help": "Настройка гостевого портала, активные клиенты и архив авторизаций.",
+        "connection_mode": "Режим",
+        "dry_run": "Тестовый",
+        "live_mode": "Рабочий",
+        "base_url": "Контроллер",
+        "site": "Сайт",
+        "auth_duration": "Гостевой доступ",
+        "minutes": "минут",
+        "credentials": "Авторизация",
+        "api_key": "API-ключ",
+        "local_account": "Локальная учётная запись",
+        "not_configured": "Не настроено",
+        "unifi_connection_help": "Текущие параметры подключения к контроллеру.",
     },
 }
 
@@ -223,7 +248,7 @@ async def admin_unifi(
         _layout(
             "UniFi",
             _messages(message, error)
-            + _settings_form(settings, lang, "active")
+            + _unifi_overview(settings, lang)
             + _active_table(settings, sessions, unifi_clients, lang),
             active_tab="unifi",
             lang=lang,
@@ -260,7 +285,12 @@ def admin_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
 
 @router.get("/wb-logo")
 def wb_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
-    return FileResponse(WB_LOGO_PATH)
+    return FileResponse(WB_LOGO_PATH, media_type="image/svg+xml")
+
+
+@router.get("/unifi-logo")
+def unifi_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
+    return FileResponse(UNIFI_LOGO_PATH, media_type="image/svg+xml")
 
 
 @router.get("/send_sms.js")
@@ -527,31 +557,59 @@ def _wb_overview(settings: Settings, lang: str) -> str:
         else html.escape(settings.sms_backend)
     )
     return f"""
-    <section class="product-intro ha-card">
-      <img class="product-logo" src="wb-logo" alt="Wiren Board">
-      <div><h2>{_t(lang, 'wb_title')}</h2><p>{_t(lang, 'wb_help')}</p></div>
-    </section>
     <div class="dashboard-grid wb-grid">
       {_test_sms_form(lang)}
-      <section class="ha-card connection-card">
-        <div class="card-heading">
-          <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 15-4-4 1.4-1.4L11 14.2l4.6-4.6L17 11l-6 6Z"/></svg></span>
-          <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'configured')}</p></div>
+      <div class="side-stack">
+        <section class="ha-card connection-card compact-card">
+          <div class="card-heading">
+            <span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-1 15-4-4 1.4-1.4L11 14.2l4.6-4.6L17 11l-6 6Z"/></svg></span>
+            <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'configured')}</p></div>
+          </div>
+          <dl class="connection-list card-content">
+            <div><dt>{_t(lang, 'backend')}</dt><dd>{html.escape(settings.sms_backend.upper())}</dd></div>
+            <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
+            <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+          </dl>
+        </section>
+        <section class="ha-card script-card compact-card">
+          <div class="section-head card-heading">
+            <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
+            <a class="secondary-button icon-download" href="send_sms.js" download title="{_t(lang, 'download')}">↓</a>
+          </div>
+          <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
+        </section>
+      </div>
+    </div>
+    """
+
+
+def _unifi_overview(settings: Settings, lang: str) -> str:
+    api_key = settings.unifi_api_key.get_secret_value().strip() if settings.unifi_api_key else ""
+    password = settings.unifi_password.get_secret_value().strip() if settings.unifi_password else ""
+    credential = _t(lang, "not_configured")
+    if api_key:
+        credential = _t(lang, "api_key")
+    elif settings.unifi_username and password:
+        credential = _t(lang, "local_account")
+    mode_key = "dry_run" if settings.unifi_dry_run else "live_mode"
+    mode_class = "warning" if settings.unifi_dry_run else "sent"
+    return f"""
+    <div class="dashboard-grid unifi-grid">
+      {_settings_form(settings, lang, 'active')}
+      <section class="ha-card connection-card compact-card">
+        <div class="card-heading product-heading">
+          <span class="unifi-mark"><img src="unifi-logo" alt="UniFi"></span>
+          <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'unifi_connection_help')}</p></div>
         </div>
         <dl class="connection-list card-content">
-          <div><dt>{_t(lang, 'backend')}</dt><dd>{html.escape(settings.sms_backend.upper())}</dd></div>
-          <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
-          <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+          <div><dt>{_t(lang, 'connection_mode')}</dt><dd><span class="badge {mode_class}">{_t(lang, mode_key)}</span></dd></div>
+          <div><dt>{_t(lang, 'base_url')}</dt><dd>{html.escape(settings.unifi_base_url or _t(lang, 'not_configured'))}</dd></div>
+          <div><dt>{_t(lang, 'site')}</dt><dd>{html.escape(settings.unifi_site)}</dd></div>
+          <div><dt>{_t(lang, 'auth_duration')}</dt><dd>{settings.unifi_auth_minutes} {_t(lang, 'minutes')}</dd></div>
+          <div><dt>{_t(lang, 'credentials')}</dt><dd>{credential}</dd></div>
         </dl>
       </section>
     </div>
-    <section class="ha-card script-card">
-      <div class="section-head card-heading">
-        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
-        <a class="secondary-button" href="send_sms.js" download>{_t(lang, 'download')}</a>
-      </div>
-      <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
-    </section>
     """
 
 
@@ -824,11 +882,10 @@ def _product_nav(lang: str, active_tab: str) -> str:
     return f"""
     <nav class="product-nav" aria-label="Products">
       <a href="./?lang={html.escape(lang)}" {wb_active}>
-        <img src="wb-logo" alt=""> <span>WB</span>
+        <span class="nav-mark wb-mark"><img src="wb-logo" alt=""></span><span>WB</span>
       </a>
       <a href="unifi?lang={html.escape(lang)}" {unifi_active}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3ZM7.76 14.26l1.42 1.42a4 4 0 0 1 5.64 0l1.42-1.42a6 6 0 0 0-8.48 0ZM4.93 11.43l1.42 1.42a8 8 0 0 1 11.3 0l1.42-1.42a10 10 0 0 0-14.14 0ZM2.1 8.6 3.5 10a12 12 0 0 1 17 0l1.4-1.4a14 14 0 0 0-19.8 0Z"/></svg>
-        <span>UniFi</span>
+        <span class="nav-mark unifi-mark"><img src="unifi-logo" alt=""></span><span>UniFi</span>
       </a>
     </nav>
     """
@@ -855,60 +912,66 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           * {{ box-sizing: border-box; }}
           html {{ color-scheme: light; }}
           body {{ margin: 0; min-height: 100vh; font-family: Roboto, Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }}
-          header {{ position: sticky; top: 0; z-index: 20; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 10px max(20px, calc((100vw - 1280px) / 2)); background: var(--surface); border-bottom: 1px solid var(--divider); box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+          header {{ position: sticky; top: 0; z-index: 20; min-height: 54px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 7px max(16px, calc((100vw - 1280px) / 2)); background: var(--surface); border-bottom: 1px solid var(--divider); box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
           .brand {{ display: flex; align-items: center; gap: 12px; min-width: 0; }}
-          .brand-logo {{ width: 40px; height: 40px; display: block; flex: 0 0 auto; object-fit: contain; }}
-          header h1 {{ margin: 0; font-size: 18px; font-weight: 500; line-height: 1.2; }}
-          .brand p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
+          .brand-logo {{ width: 34px; height: 34px; display: block; flex: 0 0 auto; object-fit: contain; }}
+          header h1 {{ margin: 0; font-size: 16px; font-weight: 500; line-height: 1.2; }}
+          .brand p {{ margin: 2px 0 0; color: var(--muted); font-size: 11px; }}
           .header-controls, .language, .table-tools, .value-actions, .muted-line {{ display: flex; align-items: center; gap: 8px; }}
           .language {{ padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--divider); }}
           .language a, .tabs a {{ color: var(--muted); text-decoration: none; font-weight: 600; }}
           .language a {{ min-width: 32px; padding: 6px 8px; border-radius: 7px; font-size: 11px; text-align: center; }}
           .language a.active {{ color: #fff; background: var(--primary); }}
-          main {{ max-width: 1280px; margin: 0 auto; padding: 24px 20px 48px; }}
-          .product-nav {{ max-width: 1280px; margin: 0 auto 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 180px)); gap: 12px; }}
-          .product-nav a {{ min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid var(--divider); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 16px; font-weight: 600; transition: border-color .15s, background .15s; }}
+          main {{ max-width: 1280px; margin: 0 auto; padding: 16px 16px 32px; }}
+          .product-nav {{ max-width: 1280px; margin: 0 auto 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 158px)); gap: 10px; }}
+          .product-nav a {{ min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: var(--shadow); text-decoration: none; font-size: 15px; font-weight: 600; transition: border-color .15s, background .15s; }}
           .product-nav a:hover {{ border-color: var(--primary); }}
           .product-nav a.active {{ border-color: var(--primary); background: rgba(3,169,244,.09); color: var(--primary); }}
-          .product-nav img, .product-nav svg {{ width: 30px; height: 30px; object-fit: contain; }}
-          .product-nav svg {{ fill: currentColor; }}
-          .product-intro {{ display: flex; align-items: center; gap: 18px; padding: 18px 20px; }}
-          .product-intro h2 {{ margin: 0; font-size: 20px; font-weight: 500; }}
-          .product-intro p {{ margin: 4px 0 0; color: var(--muted); }}
-          .product-logo {{ width: 56px; height: 56px; object-fit: contain; flex: 0 0 auto; }}
-          .dashboard-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, .72fr); gap: 20px; align-items: start; margin-bottom: 20px; }}
-          .ha-card {{ min-width: 0; margin: 0 0 20px; overflow: hidden; border: 1px solid var(--divider); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }}
+          .nav-mark {{ width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; }}
+          .nav-mark img {{ display: block; object-fit: contain; }}
+          .wb-mark img {{ width: 30px; height: 30px; }}
+          .unifi-mark {{ border-radius: 7px; background: #0559C9; }}
+          .unifi-mark img {{ width: 42px; height: 42px; max-width: none; }}
+          .product-heading .unifi-mark {{ width: 38px; height: 38px; border-radius: 9px; }}
+          .product-heading .unifi-mark img {{ width: 54px; height: 54px; }}
+          .dashboard-grid {{ display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 12px; align-items: stretch; margin-bottom: 12px; }}
+          .wb-grid {{ grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr); }}
+          .side-stack {{ min-width: 0; display: grid; align-content: start; gap: 12px; }}
+          .side-stack .ha-card {{ margin: 0; }}
+          .unifi-grid .ha-card {{ height: 100%; }}
+          .ha-card {{ min-width: 0; margin: 0 0 12px; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }}
           .dashboard-grid .ha-card {{ margin-bottom: 0; }}
-          .card-heading {{ display: flex; align-items: center; gap: 14px; padding: 18px 20px 14px; }}
-          .card-heading h2 {{ margin: 0; font-size: 18px; font-weight: 500; }}
-          .card-heading p {{ margin: 4px 0 0; color: var(--muted); line-height: 1.4; }}
-          .card-icon {{ width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
-          .card-icon svg {{ width: 23px; height: 23px; fill: currentColor; }}
-          .card-content {{ padding: 4px 20px 20px; }}
+          .card-heading {{ display: flex; align-items: center; gap: 11px; padding: 13px 16px 10px; }}
+          .card-heading h2 {{ margin: 0; font-size: 16px; font-weight: 500; }}
+          .card-heading p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }}
+          .card-icon {{ width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
+          .card-icon svg {{ width: 20px; height: 20px; fill: currentColor; }}
+          .card-content {{ padding: 3px 16px 14px; }}
           .connection-list {{ display: grid; gap: 0; margin: 0; }}
-          .connection-list div {{ display: grid; grid-template-columns: 130px minmax(0,1fr); gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--divider); }}
+          .connection-list div {{ display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--divider); }}
           .connection-list div:last-child {{ border-bottom: 0; }}
           .connection-list dt {{ color: var(--muted); }} .connection-list dd {{ min-width: 0; margin: 0; overflow-wrap: anywhere; }}
           code {{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-          .script-details summary {{ padding: 15px 20px; color: var(--primary); font-weight: 500; cursor: pointer; }}
+          .script-details summary {{ padding: 10px 16px; color: var(--primary); font-weight: 500; cursor: pointer; }}
           .script-details pre {{ max-height: 460px; margin: 0; overflow: auto; padding: 18px 20px; border-top: 1px solid var(--divider); background: #111820; color: #e6edf3; font-size: 12px; line-height: 1.55; white-space: pre; }}
           .sms-message-cell {{ max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }}
-          form.settings, form.test-sms {{ display: grid; gap: 16px; }}
+          form.settings, form.test-sms {{ display: grid; gap: 11px; }}
           .field {{ display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 500; }}
           .field > span {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
           .field small {{ margin: 0; font-weight: 400; }}
-          input, textarea {{ width: 100%; min-height: 44px; border: 1px solid #aeb7c0; border-radius: 8px; padding: 10px 12px; background: var(--surface); color: var(--text); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }}
-          textarea {{ min-height: 88px; resize: vertical; line-height: 1.45; }}
+          input, textarea {{ width: 100%; min-height: 40px; border: 1px solid #aeb7c0; border-radius: 8px; padding: 8px 11px; background: var(--surface); color: var(--text); font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; }}
+          textarea {{ min-height: 72px; resize: vertical; line-height: 1.4; }}
           input:focus, textarea:focus {{ border-color: var(--primary); box-shadow: 0 0 0 2px rgba(3,169,244,.18); }}
           input[type=file] {{ position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; pointer-events: none; }}
           .logo-picker {{ display: flex; align-items: center; gap: 12px; width: max-content; max-width: 100%; cursor: pointer; }}
-          .logo-preview {{ width: 62px; height: 62px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 2px solid var(--divider); border-radius: 12px; background: var(--surface-2); transition: border-color .15s, transform .15s; }}
+          .logo-preview {{ width: 52px; height: 52px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 2px solid var(--divider); border-radius: 10px; background: var(--surface-2); transition: border-color .15s, transform .15s; }}
           .logo-picker:hover .logo-preview {{ border-color: var(--primary); transform: translateY(-1px); }}
           .logo-preview img {{ width: 100%; height: 100%; display: block; object-fit: contain; padding: 5px; }}
           .logo-copy {{ display: grid; gap: 2px; color: var(--text); }}
           .logo-copy small {{ margin: 0; color: var(--muted); font-weight: 400; }}
           .card-actions {{ display: flex; justify-content: flex-end; padding-top: 2px; }}
-          button, .secondary-button {{ min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 8px; padding: 0 14px; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s, transform .08s; }}
+          button, .secondary-button {{ min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 8px; padding: 0 12px; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; transition: background .15s, border-color .15s, transform .08s; }}
+          .icon-download {{ width: 34px; padding: 0; font-size: 20px; }}
           button:active, .secondary-button:active {{ transform: translateY(1px); }}
           .primary-button {{ min-width: 112px; background: var(--primary); color: #fff; }}
           .primary-button:hover {{ background: var(--primary-dark); }}
@@ -916,13 +979,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .secondary-button:hover, .actions button:hover {{ background: rgba(3,169,244,.09); border-color: rgba(3,169,244,.45); }}
           button.danger {{ border: 1px solid rgba(219,68,55,.35); background: transparent; color: var(--danger); }}
           button.danger:hover {{ background: rgba(219,68,55,.1); }}
-          .section-head {{ justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--divider); }}
+          .section-head {{ justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--divider); }}
           .section-title {{ display: flex; align-items: center; gap: 14px; min-width: 0; }}
           .table-heading {{ flex-wrap: wrap; }}
           .tabs {{ display: inline-flex; gap: 3px; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--divider); }}
           .tabs a {{ padding: 7px 12px; border-radius: 7px; font-size: 13px; }}
           .tabs a.active {{ color: #fff; background: var(--primary); }}
-          .table-toolbar {{ display: flex; align-items: center; gap: 12px; padding: 14px 20px; }}
+          .table-toolbar {{ display: flex; align-items: center; gap: 10px; padding: 10px 16px; }}
           .search-field {{ position: relative; flex: 1 1 320px; max-width: 520px; }}
           .search-field svg {{ position: absolute; left: 12px; top: 50%; width: 20px; height: 20px; transform: translateY(-50%); fill: var(--muted); pointer-events: none; }}
           .search-field input {{ padding-left: 40px; background: var(--surface-2); }}
@@ -930,7 +993,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .refresh-button svg {{ width: 18px; height: 18px; fill: currentColor; }}
           .table-scroll {{ overflow-x: auto; border-top: 1px solid var(--divider); }}
           table {{ width: 100%; border-collapse: collapse; background: var(--surface); }}
-          th, td {{ padding: 13px 14px; border-bottom: 1px solid var(--divider); text-align: left; vertical-align: middle; font-size: 13px; }}
+          th, td {{ padding: 10px 12px; border-bottom: 1px solid var(--divider); text-align: left; vertical-align: middle; font-size: 13px; }}
           th {{ background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; white-space: nowrap; }}
           tbody tr:hover {{ background: rgba(3,169,244,.045); }}
           tbody tr:last-child td {{ border-bottom: 0; }}
@@ -956,7 +1019,7 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .empty {{ padding: 40px 20px; color: var(--muted); text-align: center; }}
           .empty strong {{ display: block; margin-bottom: 5px; color: var(--text); font-size: 15px; font-weight: 500; }}
           .badge {{ display: inline-flex; padding: 5px 9px; border-radius: 999px; background: #e6e9ed; font-weight: 600; font-size: 11px; text-transform: capitalize; }}
-          .badge.active, .badge.sent {{ background: #e6f4ea; color: #188038; }} .badge.revoked {{ background: #fef7e0; color: #b06000; }} .badge.blocked, .badge.failed {{ background: #fce8e6; color: #c5221f; }}
+          .badge.active, .badge.sent {{ background: #e6f4ea; color: #188038; }} .badge.warning, .badge.revoked {{ background: #fef7e0; color: #b06000; }} .badge.blocked, .badge.failed {{ background: #fce8e6; color: #c5221f; }}
           .export-button {{ white-space: nowrap; }}
           .theme-toggle {{ width: 38px; min-height: 38px; padding: 0; border: 1px solid var(--divider); border-radius: 50%; background: var(--surface); color: var(--muted); }}
           .theme-toggle:hover {{ background: var(--surface-2); color: var(--primary); }}
@@ -972,8 +1035,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 16px 12px 36px; }} header {{ padding: 10px 14px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .product-intro {{ align-items: flex-start; }} .connection-list div {{ grid-template-columns: 1fr; gap: 4px; }} .card-heading {{ padding: 16px; }} .card-content {{ padding: 2px 16px 16px; }} .table-toolbar {{ flex-wrap: wrap; padding: 12px 16px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 12px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 12px; padding: 12px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: start; width: 100%; padding: 11px 12px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
+          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
         </style>
       </head>
       <body>

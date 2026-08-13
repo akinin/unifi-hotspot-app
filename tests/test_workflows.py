@@ -28,3 +28,13 @@ def test_wirenboard_sms_rule_is_documented_and_included() -> None:
     assert 'defineVirtualDevice("sms_sender"' in rule.read_text(encoding="utf-8")
     assert "обязательно" in docs.casefold()
     assert "send_sms.js" in docs
+
+
+def test_brand_svg_assets_are_included() -> None:
+    wb = Path("hotspot/assets/wb.svg").read_text(encoding="utf-8")
+    unifi = Path("hotspot/assets/unifi.svg").read_text(encoding="utf-8")
+
+    for asset in (wb, unifi):
+        assert "<svg" in asset
+        assert "<script" not in asset.lower()
+        assert "javascript:" not in asset.lower()
