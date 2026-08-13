@@ -8,7 +8,6 @@ arch:
   - amd64
 init: false
 startup: services
-stage: stable
 ingress: true
 ingress_port: 8089
 ingress_entry: admin/
