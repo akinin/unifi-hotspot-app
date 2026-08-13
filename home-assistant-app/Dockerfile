@@ -9,6 +9,7 @@ RUN apk add --no-cache py3-pip python3 \
 
 COPY api ./api
 COPY hotspot ./hotspot
+COPY wirenboard ./wirenboard
 COPY home-assistant-app/rootfs /
 
 ENV PYTHONPATH=/opt/sms-gateway

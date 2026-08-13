@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0
+
+- Split the interface into dedicated WB and UniFi workspaces.
+- Add the SMS delivery journal, MQTT connection summary, and viewing/downloading of the mandatory `send_sms.js` rule.
+- Use the supplied Wiren Board logo asset in the interface without recreating it.
+
 ## 0.3.0
 
 - Redesign the administration interface to match Home Assistant cards, colors, spacing, and responsive behavior.

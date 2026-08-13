@@ -11,8 +11,9 @@ from hotspot.admin import (
     _layout,
     _redirect,
     _settings_form,
+    _sms_log_table,
     _tabs,
-    _test_sms_form,
+    _wb_overview,
 )
 from hotspot.unifi import UniFiClient
 
@@ -49,7 +50,7 @@ def test_admin_markup_uses_ingress_safe_relative_links() -> None:
 
     assert 'action="settings"' in _settings_form(settings, "en", "active")
     assert 'src="logo"' in _settings_form(settings, "en", "active")
-    assert 'href="./?lang=en"' in _tabs("en", "active")
+    assert 'href="unifi?lang=en"' in _tabs("en", "active")
     assert 'href="archive.csv"' in _archive_table([], "en")
     assert _redirect(message="done", root="../../").headers["location"].startswith("../../?")
 
@@ -58,11 +59,31 @@ def test_admin_dashboard_has_productivity_controls() -> None:
     settings = Settings(app_role="admin")
     active = _active_table(settings, [], {}, "en")
     archive = _archive_table([], "en")
-    page = _layout("Active clients", _settings_form(settings, "en", "active") + _test_sms_form("en") + active, "active", "en")
+    page = _layout(
+        "Wiren Board",
+        _wb_overview(settings, "en") + _sms_log_table([], "en"),
+        "wb",
+        "en",
+    )
 
     assert 'data-filter-input="active"' in active
     assert 'data-filter-input="archive"' in archive
+    assert 'data-filter-input="sms"' in page
     assert 'id="sms-message"' in page
     assert 'id="confirm-dialog"' in page
     assert 'class="toast"' in page
-    assert "sms-client-button" in page
+    assert 'src="wb-logo"' in page
+    assert 'href="unifi?lang=en"' in page
+
+
+def test_sms_store_records_delivery_history(tmp_path) -> None:
+    from api.store import Store
+
+    store = Store(str(tmp_path / "sms.sqlite3"))
+    store.record_sms("+79990000000", "test", "mqtt", "sent")
+    rows = store.list_sms_log()
+
+    assert len(rows) == 1
+    assert rows[0]["phone"] == "+79990000000"
+    assert rows[0]["message"] == "test"
+    assert rows[0]["status"] == "sent"

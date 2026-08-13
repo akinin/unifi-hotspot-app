@@ -34,6 +34,43 @@ class Store:
             conn.execute(
                 "PRAGMA journal_mode=WAL"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sms_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    phone TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    backend TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    error TEXT,
+                    created_at INTEGER NOT NULL
+                )
+                """
+            )
+
+    def record_sms(
+        self,
+        phone: str,
+        message: str,
+        backend: str,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO sms_log(phone, message, backend, status, error, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (phone, message, backend, status, error, int(time.time())),
+            )
+
+    def list_sms_log(self, limit: int = 500) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM sms_log ORDER BY created_at DESC, id DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
 
     def get_otp(self, phone: str, purpose: str) -> Optional[sqlite3.Row]:
         with self._connect() as conn:
