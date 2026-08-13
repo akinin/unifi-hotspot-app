@@ -1,3 +1,5 @@
+import asyncio
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -8,6 +10,20 @@ from api.config import Settings
 
 class UniFiClientNotFoundError(RuntimeError):
     pass
+
+
+_CLIENT_CACHE: dict[tuple[str, str, bool], tuple[float, list[dict[str, object]]]] = {}
+_CLIENT_CACHE_LOCKS: dict[tuple[int, tuple[str, str, bool]], asyncio.Lock] = {}
+
+
+def is_authorized_client(client: dict[str, object]) -> bool:
+    """Return whether UniFi reports an active guest authorization."""
+    authorized = client.get("authorized")
+    if isinstance(authorized, bool):
+        return authorized
+    if authorized is not None:
+        return str(authorized).lower() in ("1", "true", "yes")
+    return bool(client.get("authorized_by") or client.get("guest_token"))
 
 
 @dataclass
@@ -43,6 +59,16 @@ class UniFiClient:
             "headers": headers,
         }
 
+    def _client_cache_key(self) -> tuple[str, str, bool]:
+        return (
+            self.settings.unifi_base_url.rstrip("/"),
+            self.settings.unifi_site,
+            self._uses_api_key,
+        )
+
+    def _invalidate_client_cache(self) -> None:
+        _CLIENT_CACHE.pop(self._client_cache_key(), None)
+
     async def authorize_guest(
         self,
         client_mac: str,
@@ -61,6 +87,7 @@ class UniFiClient:
                     client_mac,
                     {"action": "AUTHORIZE_GUEST_ACCESS", "timeLimitMinutes": auth_minutes},
                 )
+                self._invalidate_client_cache()
                 return
             await self._login(client)
             await self._post_unifi_command(
@@ -68,6 +95,7 @@ class UniFiClient:
                 "stamgr",
                 _authorize_guest_payload(client_mac, auth_minutes, ap_mac),
             )
+        self._invalidate_client_cache()
 
     async def find_client_mac_by_ip(self, client_ip: str) -> Optional[str]:
         self._check_configuration()
@@ -99,6 +127,25 @@ class UniFiClient:
                 data = await self._get_unifi_data(client, f"/api/s/{self.settings.unifi_site}/stat/sta")
         return data or []
 
+    async def list_clients_cached(self, max_age: float = 20.0) -> list[dict[str, object]]:
+        """Coalesce dashboard/API reads so they do not repeatedly log in to UniFi."""
+        key = self._client_cache_key()
+        now = time.monotonic()
+        cached = _CLIENT_CACHE.get(key)
+        if cached and now - cached[0] <= max_age:
+            return cached[1]
+
+        loop_key = (id(asyncio.get_running_loop()), key)
+        lock = _CLIENT_CACHE_LOCKS.setdefault(loop_key, asyncio.Lock())
+        async with lock:
+            now = time.monotonic()
+            cached = _CLIENT_CACHE.get(key)
+            if cached and now - cached[0] <= max_age:
+                return cached[1]
+            clients = await self.list_clients()
+            _CLIENT_CACHE[key] = (time.monotonic(), clients)
+            return clients
+
     async def is_guest_authorized(self, client_mac: str) -> Optional[bool]:
         client_mac = client_mac.lower()
         self._check_configuration()
@@ -120,14 +167,7 @@ class UniFiClient:
         for item in data:
             if str(item.get("mac", "")).lower() != client_mac:
                 continue
-            authorized = item.get("authorized")
-            if isinstance(authorized, bool):
-                return authorized
-            if authorized is not None:
-                return str(authorized).lower() in ("1", "true", "yes")
-            if item.get("authorized_by") or item.get("guest_token"):
-                return True
-            return None
+            return is_authorized_client(item)
         return None
 
     async def unauthorize_guest(self, client_mac: str) -> None:
@@ -139,6 +179,7 @@ class UniFiClient:
                 await self._integration_client_action(
                     client, client_mac, {"action": "UNAUTHORIZE_GUEST_ACCESS"}
                 )
+                self._invalidate_client_cache()
                 return
             await self._login(client)
             await self._post_unifi_command(
@@ -146,6 +187,7 @@ class UniFiClient:
                 "stamgr",
                 {"cmd": "unauthorize-guest", "mac": client_mac.lower()},
             )
+        self._invalidate_client_cache()
 
     async def block_client(self, client_mac: str) -> None:
         if self.settings.unifi_dry_run:
@@ -163,6 +205,7 @@ class UniFiClient:
                 "stamgr",
                 {"cmd": "block-sta", "mac": client_mac.lower()},
             )
+        self._invalidate_client_cache()
 
     async def _integration_site_id(self, client: httpx.AsyncClient) -> str:
         response = await client.get("/proxy/network/integration/v1/sites", params={"limit": 100})

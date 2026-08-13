@@ -12,8 +12,7 @@ from api.store import Store
 
 from .audit import build_access_event, record_access_event
 from .store import HotspotStore
-from .unifi import UniFiClient, UniFiClientNotFoundError
-
+from .unifi import UniFiClient, UniFiClientNotFoundError, is_authorized_client
 
 router = APIRouter(
     prefix="/api/unifi",
@@ -46,7 +45,7 @@ async def status(settings: Settings = Depends(get_settings)) -> dict[str, object
     error = None
     if configured:
         try:
-            await UniFiClient(settings).list_clients()
+            await UniFiClient(settings).list_clients_cached()
             reachable = True
         except Exception as exc:
             error = str(exc)
@@ -90,7 +89,7 @@ async def active_clients(
 ) -> dict[str, object]:
     sessions = _hotspot_store(store).list_active_sessions()
     try:
-        clients = await UniFiClient(settings).list_clients()
+        clients = await UniFiClient(settings).list_clients_cached()
     except Exception as exc:
         clients = []
         unifi_error = str(exc)
@@ -102,8 +101,10 @@ async def active_clients(
         if client.get("mac")
     }
     items = []
+    known_macs: set[str] = set()
     for session in sessions:
         mac = str(session["client_mac"]).lower()
+        known_macs.add(mac)
         client = by_mac.get(mac, {})
         items.append(
             {
@@ -114,6 +115,22 @@ async def active_clients(
                 "authorized_at": session["authorized_at"],
                 "valid_until": session["valid_until"],
                 "ap_mac": session["ap_mac"],
+                "source": "portal",
+            }
+        )
+    for mac, client in by_mac.items():
+        if mac in known_macs or not is_authorized_client(client):
+            continue
+        items.append(
+            {
+                "mac": mac,
+                "name": client.get("name") or client.get("hostname"),
+                "phone": None,
+                "ip": client.get("ip"),
+                "authorized_at": client.get("authorized_at") or client.get("first_seen"),
+                "valid_until": client.get("guest_authorized_until") or client.get("authorized_until"),
+                "ap_mac": client.get("ap_mac"),
+                "source": "unifi",
             }
         )
     return {"count": len(items), "clients": items, "unifi_error": unifi_error}
@@ -153,9 +170,15 @@ async def extend_client(
 ) -> dict[str, object]:
     hotspot_store = _hotspot_store(store)
     session = hotspot_store.get_session(client_mac.lower())
-    if session is None:
-        raise HTTPException(status_code=404, detail="Client was not found")
     now = int(time.time())
+    if session is None:
+        minutes = payload.days * 24 * 60
+        try:
+            await UniFiClient(settings).authorize_guest(client_mac, minutes=minutes)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"ok": True, "valid_until": now + minutes * 60, "source": "unifi"}
+
     remaining_minutes = max(0, int(session["valid_until"] or now) - now) // 60
     minutes = remaining_minutes + payload.days * 24 * 60
     try:
