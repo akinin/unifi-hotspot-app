@@ -24,7 +24,7 @@ router = APIRouter(prefix="/admin")
 ADMIN_ROOT = "./"
 LOGO_PATH = Path(__file__).with_name("assets") / "ahs.png"
 WB_LOGO_PATH = Path(__file__).with_name("assets") / "wb.svg"
-UNIFI_LOGO_PATH = Path(__file__).with_name("assets") / "unifi.svg"
+UNIFI_LOGO_PATH = Path(__file__).with_name("assets") / "unifi.png"
 WB_SCRIPT_PATH = Path(__file__).parent.parent / "wirenboard" / "send_sms.js"
 
 TEXT = {
@@ -114,6 +114,8 @@ TEXT = {
         "local_account": "Local account",
         "not_configured": "Not configured",
         "unifi_connection_help": "Current controller connection settings.",
+        "client_actions": "Client actions",
+        "open_actions": "Manage",
     },
     "ru": {
         "active": "Активные",
@@ -201,6 +203,8 @@ TEXT = {
         "local_account": "Локальная учётная запись",
         "not_configured": "Не настроено",
         "unifi_connection_help": "Текущие параметры подключения к контроллеру.",
+        "client_actions": "Действия с клиентом",
+        "open_actions": "Управлять",
     },
 }
 
@@ -280,7 +284,7 @@ def admin_archive(
 @router.get("/logo")
 def admin_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
     logo_path = Path(settings.hotspot_logo_path)
-    return FileResponse(logo_path if logo_path.exists() else LOGO_PATH)
+    return FileResponse(logo_path if logo_path.exists() else UNIFI_LOGO_PATH)
 
 
 @router.get("/wb-logo")
@@ -290,7 +294,7 @@ def wb_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
 
 @router.get("/unifi-logo")
 def unifi_logo(settings: Settings = Depends(require_admin)) -> FileResponse:
-    return FileResponse(UNIFI_LOGO_PATH, media_type="image/svg+xml")
+    return FileResponse(UNIFI_LOGO_PATH, media_type="image/png")
 
 
 @router.get("/send_sms.js")
@@ -529,10 +533,10 @@ def _settings_form(settings: Settings, lang: str, active_tab: str) -> str:
         </span>
         <div><h2>{_t(lang, "portal")}</h2><p>{_t(lang, "portal_help")}</p></div>
       </div>
-      <form class="settings card-content" method="post" action="settings" enctype="multipart/form-data">
+      <form class="settings portal-settings card-content" method="post" action="settings" enctype="multipart/form-data">
         <input type="hidden" name="lang" value="{html.escape(lang)}">
         <label class="field"><span>{_t(lang, "welcome_text")}</span><input name="title" value="{title}" maxlength="120"></label>
-        <label class="logo-picker" title="{_t(lang, 'choose_file')}">
+        <label class="logo-picker compact-logo-picker" title="{_t(lang, 'choose_file')}">
           <span class="logo-preview">
             <input id="logo-file" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
             <img id="logo-preview" src="logo" alt="{_t(lang, 'logo')}">
@@ -685,14 +689,11 @@ def _active_table(
             f"<td data-label='{_t(lang, 'client')}'>{_client_identity(session, client, mac, lang)}</td>"
             f"<td data-label='{_t(lang, 'phone')}'><div class='value-actions'><span>{html.escape(phone)}</span><button type='button' class='icon-button copy-button' data-copy='{html.escape(phone, quote=True)}' title='{_t(lang, 'copy')}' aria-label='{_t(lang, 'copy')}'>⧉</button></div></td>"
             f"<td data-label='{_t(lang, 'ip')}'>{html.escape(ip_address)}</td>"
-            f"<td data-label='{_t(lang, 'authorized')}'>{_dt(session['authorized_at'])}</td>"
-            f"<td data-label='{_t(lang, 'valid_until')}'>{_dt(session['valid_until'])}</td>"
-            f"<td data-label='{_t(lang, 'extend')}'>{_extend_actions(mac, lang)}</td>"
-            f"<td data-label='{_t(lang, 'revoke')}'>{_revoke_actions(mac, lang)}</td>"
-            f"<td data-label='{_t(lang, 'block')}'>{_block_action(mac, lang)}</td>"
+            f"<td data-label='{_t(lang, 'valid_until')}'><strong>{_dt(session['valid_until'])}</strong><small>{_t(lang, 'authorized')}: {_dt(session['authorized_at'])}</small></td>"
+            f"<td data-label='{_t(lang, 'actions')}'>{_client_actions(mac, lang)}</td>"
             "</tr>"
         )
-    body = "\n".join(rows) if rows else f"<tr class='empty-row'><td colspan='8' class='empty'><strong>{_t(lang, 'no_active')}</strong><small>{_t(lang, 'no_active_hint')}</small></td></tr>"
+    body = "\n".join(rows) if rows else f"<tr class='empty-row'><td colspan='5' class='empty'><strong>{_t(lang, 'no_active')}</strong><small>{_t(lang, 'no_active_hint')}</small></td></tr>"
     return f"""
     <section class="ha-card clients-card">
       <div class="section-head card-heading table-heading">
@@ -702,14 +703,12 @@ def _active_table(
       {_table_toolbar(lang, "active")}
       <div class="table-scroll"><table class="active-table filter-table" data-filter-table="active">
         <colgroup>
-          <col class="col-client"><col class="col-phone"><col class="col-ip">
-          <col class="col-date"><col class="col-date"><col class="col-extend">
-          <col class="col-action"><col class="col-action">
+          <col class="col-client"><col class="col-phone"><col class="col-ip"><col class="col-valid"><col class="col-actions">
         </colgroup>
         <thead>
           <tr>
-            <th>{_t(lang, "client")}</th><th>{_t(lang, "phone")}</th><th>{_t(lang, "ip")}</th><th>{_t(lang, "authorized")}</th>
-            <th>{_t(lang, "valid_until")}</th><th>{_t(lang, "extend")}</th><th>{_t(lang, "revoke")}</th><th>{_t(lang, "block")}</th>
+            <th>{_t(lang, "client")}</th><th>{_t(lang, "phone")}</th><th>{_t(lang, "ip")}</th>
+            <th>{_t(lang, "valid_until")}</th><th>{_t(lang, "actions")}</th>
           </tr>
         </thead>
         <tbody>{body}</tbody>
@@ -738,6 +737,18 @@ def _extend_actions(mac: str, lang: str = "en") -> str:
     return f"""
     <div class="actions">
       <form method="post" action="clients/{html.escape(mac)}/extend"><input type="hidden" name="lang" value="{html.escape(lang)}">{options}</form>
+    </div>
+    """
+
+
+def _client_actions(mac: str, lang: str = "en") -> str:
+    menu_id = f"client-actions-{mac.replace(':', '-')}"
+    return f"""
+    <button type="button" class="secondary-button client-actions-trigger" data-client-actions="{menu_id}">{_t(lang, 'open_actions')} <span aria-hidden="true">▾</span></button>
+    <div id="{menu_id}" class="client-actions-popover" popover>
+      <strong>{_t(lang, 'extend')}</strong>
+      {_extend_actions(mac, lang)}
+      <div class="client-danger-actions">{_revoke_actions(mac, lang)}{_block_action(mac, lang)}</div>
     </div>
     """
 
@@ -894,13 +905,18 @@ def _product_nav(lang: str, active_tab: str) -> str:
 def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
     ru_active = "class='active'" if lang == "ru" else ""
     en_active = "class='active'" if lang == "en" else ""
+    is_unifi = active_tab == "unifi"
+    brand_logo = "unifi-logo" if is_unifi else "wb-logo"
+    brand_alt = "UniFi" if is_unifi else "Wiren Board"
+    brand_title = "UniFi Hotspot" if is_unifi else "SMS Gateway"
+    brand_subtitle = _t(lang, "unifi_help" if is_unifi else "subtitle")
     return f"""
     <!doctype html>
     <html lang="{html.escape(lang)}">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="icon" href="wb-logo">
+        <link rel="icon" href="{brand_logo}">
         <title>{html.escape(title)} - SMS Gateway Admin</title>
         <script>
           const savedTheme = localStorage.getItem("sms-theme");
@@ -931,9 +947,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .nav-mark img {{ display: block; object-fit: contain; }}
           .wb-mark img {{ width: 30px; height: 30px; }}
           .unifi-mark {{ border-radius: 7px; background: #0559C9; }}
-          .unifi-mark img {{ width: 42px; height: 42px; max-width: none; }}
+          .unifi-mark img {{ width: 100%; height: 100%; object-fit: contain; }}
           .product-heading .unifi-mark {{ width: 38px; height: 38px; border-radius: 9px; }}
-          .product-heading .unifi-mark img {{ width: 54px; height: 54px; }}
           .dashboard-grid {{ display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 12px; align-items: stretch; margin-bottom: 12px; }}
           .wb-grid {{ grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr); }}
           .side-stack {{ min-width: 0; display: grid; align-content: start; gap: 12px; }}
@@ -941,12 +956,12 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .unifi-grid .ha-card {{ height: 100%; }}
           .ha-card {{ min-width: 0; margin: 0 0 12px; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }}
           .dashboard-grid .ha-card {{ margin-bottom: 0; }}
-          .card-heading {{ display: flex; align-items: center; gap: 11px; padding: 13px 16px 10px; }}
+          .card-heading {{ display: flex; align-items: center; gap: 10px; padding: 11px 14px 8px; }}
           .card-heading h2 {{ margin: 0; font-size: 16px; font-weight: 500; }}
           .card-heading p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }}
           .card-icon {{ width: 36px; height: 36px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
           .card-icon svg {{ width: 20px; height: 20px; fill: currentColor; }}
-          .card-content {{ padding: 3px 16px 14px; }}
+          .card-content {{ padding: 3px 14px 12px; }}
           .connection-list {{ display: grid; gap: 0; margin: 0; }}
           .connection-list div {{ display: grid; grid-template-columns: 118px minmax(0,1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--divider); }}
           .connection-list div:last-child {{ border-bottom: 0; }}
@@ -956,6 +971,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .script-details pre {{ max-height: 460px; margin: 0; overflow: auto; padding: 18px 20px; border-top: 1px solid var(--divider); background: #111820; color: #e6edf3; font-size: 12px; line-height: 1.55; white-space: pre; }}
           .sms-message-cell {{ max-width: 420px; white-space: pre-wrap; overflow-wrap: anywhere; }}
           form.settings, form.test-sms {{ display: grid; gap: 11px; }}
+          .portal-settings {{ grid-template-columns: minmax(220px, 1fr) auto auto; align-items: end; }}
+          .portal-settings .card-actions {{ padding: 0; }}
           .field {{ display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 500; }}
           .field > span {{ display: flex; justify-content: space-between; align-items: center; gap: 12px; }}
           .field small {{ margin: 0; font-weight: 400; }}
@@ -964,9 +981,10 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           input:focus, textarea:focus {{ border-color: var(--primary); box-shadow: 0 0 0 2px rgba(3,169,244,.18); }}
           input[type=file] {{ position: absolute; width: 1px; height: 1px; min-height: 0; opacity: 0; pointer-events: none; }}
           .logo-picker {{ display: flex; align-items: center; gap: 12px; width: max-content; max-width: 100%; cursor: pointer; }}
-          .logo-preview {{ width: 52px; height: 52px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 2px solid var(--divider); border-radius: 10px; background: var(--surface-2); transition: border-color .15s, transform .15s; }}
+          .logo-preview {{ width: 42px; height: 42px; display: grid; place-items: center; overflow: hidden; flex: 0 0 auto; border: 1px solid var(--divider); border-radius: 9px; background: #0559C9; transition: border-color .15s, transform .15s; }}
           .logo-picker:hover .logo-preview {{ border-color: var(--primary); transform: translateY(-1px); }}
-          .logo-preview img {{ width: 100%; height: 100%; display: block; object-fit: contain; padding: 5px; }}
+          .logo-preview img {{ width: 100%; height: 100%; display: block; object-fit: contain; padding: 0; }}
+          .compact-logo-picker .logo-copy {{ display: none; }}
           .logo-copy {{ display: grid; gap: 2px; color: var(--text); }}
           .logo-copy small {{ margin: 0; color: var(--muted); font-weight: 400; }}
           .card-actions {{ display: flex; justify-content: flex-end; padding-top: 2px; }}
@@ -997,8 +1015,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           th {{ background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .035em; white-space: nowrap; }}
           tbody tr:hover {{ background: rgba(3,169,244,.045); }}
           tbody tr:last-child td {{ border-bottom: 0; }}
-          .active-table {{ min-width: 1080px; table-layout: fixed; }}
-          .active-table .col-client {{ width: 17%; }} .active-table .col-phone {{ width: 16%; }} .active-table .col-ip {{ width: 8%; }} .active-table .col-date {{ width: 12%; }} .active-table .col-extend {{ width: 17%; }} .active-table .col-action {{ width: 9%; }}
+          .active-table {{ min-width: 760px; table-layout: fixed; }}
+          .active-table .col-client {{ width: 28%; }} .active-table .col-phone {{ width: 20%; }} .active-table .col-ip {{ width: 12%; }} .active-table .col-valid {{ width: 23%; }} .active-table .col-actions {{ width: 17%; }}
           small {{ display: block; color: var(--muted); margin-top: 3px; }}
           .muted-line {{ justify-content: flex-start; gap: 5px; }}
           .muted-line small {{ margin: 0; }}
@@ -1009,6 +1027,13 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           .text-button:hover {{ background: rgba(3,169,244,.1); }}
           .actions, .actions form {{ display: flex; flex-wrap: wrap; gap: 6px; }}
           .actions button {{ min-height: 32px; padding: 0 9px; white-space: nowrap; }}
+          .client-actions-trigger {{ white-space: nowrap; }}
+          .client-actions-popover {{ position: fixed; inset: auto; width: 230px; margin: 0; padding: 11px; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgba(0,0,0,.28); }}
+          .client-actions-popover > strong {{ display: block; margin-bottom: 8px; font-size: 12px; }}
+          .client-actions-popover .actions form {{ display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; }}
+          .client-actions-popover .actions button {{ min-width: 0; padding: 0 5px; }}
+          .client-danger-actions {{ display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }}
+          .client-danger-actions .actions, .client-danger-actions form, .client-danger-actions button {{ width: 100%; }}
           .client-display {{ min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text); font-weight: 500; text-align: left; }}
           .client-display:hover {{ color: var(--primary); background: transparent; }}
           .client-name input {{ width: 170px; min-height: 34px; padding: 6px 8px; }}
@@ -1035,15 +1060,15 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
           [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: hidden; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
+          @media (max-width: 900px) {{ .dashboard-grid {{ grid-template-columns: 1fr; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} .portal-settings {{ grid-template-columns: minmax(200px, 1fr) auto auto; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: 1fr 1fr; }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .portal-settings {{ grid-template-columns: minmax(0, 1fr) auto; }} .portal-settings .field {{ grid-column: 1 / -1; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} }}
         </style>
       </head>
       <body>
         <header>
           <div class="brand">
-            <img class="brand-logo" src="wb-logo" alt="Wiren Board">
-            <div><h1>SMS Gateway</h1><p>{_t(lang, "subtitle")}</p></div>
+            <img class="brand-logo" src="{brand_logo}" alt="{brand_alt}">
+            <div><h1>{brand_title}</h1><p>{brand_subtitle}</p></div>
           </div>
           <div class="header-controls">
             <div class="language"><a href="?lang=ru" {ru_active}>RU</a><a href="?lang=en" {en_active}>EN</a></div>
@@ -1126,6 +1151,22 @@ def _layout(title: str, content: str, active_tab: str, lang: str) -> str:
             applyFilter();
           }});
           document.querySelectorAll("[data-refresh]").forEach((button) => button.addEventListener("click", () => location.reload()));
+          document.querySelectorAll("[data-client-actions]").forEach((button) => {{
+            button.addEventListener("click", () => {{
+              const menu = document.getElementById(button.dataset.clientActions);
+              if (!menu || !menu.showPopover) return;
+              document.querySelectorAll(".client-actions-popover:popover-open").forEach((other) => other.hidePopover());
+              menu.showPopover();
+              requestAnimationFrame(() => {{
+                const rect = button.getBoundingClientRect();
+                const left = Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8));
+                const below = rect.bottom + 6;
+                const top = below + menu.offsetHeight <= innerHeight - 8 ? below : Math.max(8, rect.top - menu.offsetHeight - 6);
+                menu.style.left = `${{left}}px`;
+                menu.style.top = `${{top}}px`;
+              }});
+            }});
+          }});
           const confirmDialog = document.getElementById("confirm-dialog");
           let pendingForm = null;
           document.querySelectorAll("form[data-confirm]").forEach((form) => {{

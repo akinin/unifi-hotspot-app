@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Replace the UniFi artwork everywhere with the supplied PNG without redrawing it.
+- Use the active product identity in the page header and favicon.
+- Make portal settings denser and consolidate guest extension, revocation, and blocking into one action menu.
+- Reduce the active-client table from eight columns to five while preserving authorization details.
+
 ## 0.4.1
 
 - Use the supplied WB and UniFi SVG assets in the interface; place UniFi artwork on its brand-blue `#0559C9` background.
