@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.8
+
+- Merge the required WB script into the connection card behind a top-right Script action.
+- Remove the duplicate USB modem summary card.
+- Remove the redundant Preview item from the Active/Archive switcher.
+- Show active guests, SMS transport and TLS state in the Hotspot summary.
+- Display and edit the default guest access duration in days directly from the summary card.
+
 ## 0.5.7
 
 - Allow the trusted preview iframe to load its same-origin saved logo through Home Assistant ingress.

@@ -95,8 +95,18 @@ TEXT = {
         "connection": "Connection",
         "mqtt_host": "MQTT server",
         "mqtt_topic": "Send topic",
+        "mqtt_port": "MQTT port",
+        "mqtt_auth": "MQTT authorization",
+        "script_path": "Script path",
+        "operator": "Operator",
+        "modem_model": "Modem",
+        "registration": "Registration",
+        "signal": "Signal",
+        "automatic": "Automatic",
+        "unavailable": "Unavailable",
         "configured": "Configured",
         "required_script": "Required WB script",
+        "script": "Script",
         "script_help": "Install this file in /etc/wb-rules/send_sms.js on Wiren Board.",
         "view_script": "View file",
         "download": "Download",
@@ -112,6 +122,15 @@ TEXT = {
         "auth_duration": "Guest access",
         "minutes": "minutes",
         "credentials": "Credentials",
+        "active_guests": "Active guests",
+        "sms_channel": "SMS channel",
+        "tls_check": "TLS check",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "days": "days",
+        "access_saved": "Guest access duration updated",
+        "appearance": "Appearance",
+        "guest_access": "Guest access",
         "api_key": "API key",
         "local_account": "Local account",
         "not_configured": "Not configured",
@@ -198,8 +217,18 @@ TEXT = {
         "connection": "Подключение",
         "mqtt_host": "MQTT-сервер",
         "mqtt_topic": "Топик отправки",
+        "mqtt_port": "Порт MQTT",
+        "mqtt_auth": "Авторизация MQTT",
+        "script_path": "Путь скрипта",
+        "operator": "Оператор",
+        "modem_model": "Модем",
+        "registration": "Регистрация",
+        "signal": "Сигнал",
+        "automatic": "Автоматически",
+        "unavailable": "Недоступно",
         "configured": "Настроено",
         "required_script": "Обязательный скрипт WB",
+        "script": "Скрипт",
         "script_help": "Установите файл в /etc/wb-rules/send_sms.js на Wiren Board.",
         "view_script": "Показать файл",
         "download": "Скачать",
@@ -215,6 +244,15 @@ TEXT = {
         "auth_duration": "Гостевой доступ",
         "minutes": "минут",
         "credentials": "Авторизация",
+        "active_guests": "Активные гости",
+        "sms_channel": "Канал SMS",
+        "tls_check": "Проверка TLS",
+        "enabled": "Включена",
+        "disabled": "Отключена",
+        "days": "дней",
+        "access_saved": "Срок гостевого доступа обновлён",
+        "appearance": "Оформление",
+        "guest_access": "Гостевой доступ",
         "api_key": "API-ключ",
         "local_account": "Локальная учётная запись",
         "not_configured": "Не настроено",
@@ -261,7 +299,7 @@ async def admin_home(
         _layout(
             "UniFi",
             _messages(message, error)
-            + _unifi_overview(settings, lang)
+            + _unifi_overview(settings, lang, len(sessions))
             + _active_table(settings, sessions, unifi_clients, lang),
             active_tab="hotspot",
             lang=lang,
@@ -608,6 +646,18 @@ async def update_settings(
     )
 
 
+@router.post("/settings/access-days")
+def update_access_days(
+    days: int = Form(...),
+    lang: str = Form(default="en"),
+    settings: Settings = Depends(require_admin),
+) -> RedirectResponse:
+    days = max(1, min(365, days))
+    _set_env_value(Path(settings.settings_file_path), "UNIFI_AUTH_MINUTES", str(days * 1440))
+    get_settings.cache_clear()
+    return _redirect(message=_t(lang, "access_saved"), lang=lang)
+
+
 @router.post("/test-sms")
 def send_test_sms(
     phone: str = Form(...),
@@ -697,30 +747,58 @@ def _messages(message: str, error: str) -> str:
     return ""
 
 
-def _wb_overview(settings: Settings, lang: str) -> str:
-    connection = (
-        f"{html.escape(settings.wb_mqtt_host)}:{settings.wb_mqtt_port}"
-        if settings.sms_backend == "mqtt"
-        else html.escape(settings.sms_backend)
-    )
+def _wb_overview(
+    settings: Settings,
+    lang: str,
+    modem_status: Optional[dict[str, str]] = None,
+) -> str:
     transport_logo = "usb-logo" if settings.sms_backend == "mmcli" else "wb-logo"
     transport_name = "USB / ModemManager" if settings.sms_backend == "mmcli" else "Wiren Board / MQTT"
     if settings.sms_backend == "mmcli":
+        modem = modem_status if modem_status is not None else SmsSender(settings).modem_status()
+        unavailable = _t(lang, "unavailable")
+        modem_id = modem.get("id") or settings.mmcli_modem_id
+        if modem_id in {"any", "auto"}:
+            modem_id = _t(lang, "automatic")
         connection_rows = f"""
-          <div><dt>{_t(lang, 'backend')}</dt><dd>MMCLI</dd></div>
-          <div><dt>Modem ID</dt><dd><code>{html.escape(settings.mmcli_modem_id)}</code></dd></div>
+          <div><dt>Modem ID</dt><dd><code>{html.escape(modem_id)}</code></dd></div>
+          <div><dt>{_t(lang, 'modem_model')}</dt><dd>{html.escape(modem.get('model') or unavailable)}</dd></div>
+          <div><dt>{_t(lang, 'operator')}</dt><dd>{html.escape(modem.get('operator') or unavailable)}</dd></div>
+          <div><dt>{_t(lang, 'registration')}</dt><dd>{html.escape(modem.get('registration') or unavailable)}</dd></div>
+          <div><dt>{_t(lang, 'signal')}</dt><dd>{html.escape(modem.get('signal') or unavailable)}</dd></div>
         """
     else:
+        mqtt_auth = _t(lang, "configured") if settings.wb_mqtt_username else _t(lang, "not_configured")
         connection_rows = f"""
-          <div><dt>{_t(lang, 'backend')}</dt><dd>MQTT</dd></div>
-          <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{connection}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_host')}</dt><dd>{html.escape(settings.wb_mqtt_host)}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_port')}</dt><dd>{settings.wb_mqtt_port}</dd></div>
+          <div><dt>{_t(lang, 'mqtt_auth')}</dt><dd>{mqtt_auth}</dd></div>
           <div><dt>{_t(lang, 'mqtt_topic')}</dt><dd><code>{html.escape(settings.wb_sms_topic)}</code></dd></div>
+          <div><dt>{_t(lang, 'script_path')}</dt><dd><code>/etc/wb-rules/send_sms.js</code></dd></div>
+        """
+    script_panel = ""
+    if settings.sms_backend == "mqtt":
+        script = html.escape(WB_SCRIPT_PATH.read_text(encoding="utf-8"))
+        script_panel = f"""
+        <details class="connection-script">
+          <summary class="secondary-button script-button" title="{_t(lang, 'required_script')}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm1 3.5L18.5 9H15V5.5ZM9.4 13.1 7 15.5l2.4 2.4 1.1-1.1-1.3-1.3 1.3-1.3-1.1-1.1Zm5.2 0-1.1 1.1 1.3 1.3-1.3 1.3 1.1 1.1 2.4-2.4-2.4-2.4Z"/></svg>
+            <span>{_t(lang, 'script')}</span>
+          </summary>
+          <div class="connection-script-content">
+            <div class="script-inline-heading">
+              <div><strong>{_t(lang, 'required_script')}</strong><p>{_t(lang, 'script_help')}</p></div>
+              <a class="secondary-button icon-download" href="send_sms.js" download title="{_t(lang, 'download')}" aria-label="{_t(lang, 'download')}">↓</a>
+            </div>
+            <pre><code>{script}</code></pre>
+          </div>
+        </details>
         """
     return f"""
     <div class="dashboard-grid wb-grid">
       {_test_sms_form(lang, settings.sms_backend)}
-      <div class="side-stack">
-        <section class="ha-card connection-card compact-card">
+      <div class="side-stack single-connection">
+        <section class="ha-card connection-card compact-card connection-card-with-action">
           <div class="card-heading product-heading">
             <span class="transport-mark"><img src="{transport_logo}" alt="{transport_name}"></span>
             <div><h2>{_t(lang, 'connection')}</h2><p>{_t(lang, 'configured')}</p></div>
@@ -728,40 +806,14 @@ def _wb_overview(settings: Settings, lang: str) -> str:
           <dl class="connection-list card-content">
             {connection_rows}
           </dl>
+          {script_panel}
         </section>
-        {_transport_details_card(settings, lang)}
       </div>
     </div>
     """
 
 
-def _transport_details_card(settings: Settings, lang: str) -> str:
-    if settings.sms_backend == "mmcli":
-        return f"""
-        <section class="ha-card script-card compact-card">
-          <div class="card-heading product-heading">
-            <span class="transport-mark"><img src="usb-logo" alt="USB"></span>
-            <div><h2>{_t(lang, 'usb_modem')}</h2><p>{_t(lang, 'usb_help')}</p></div>
-          </div>
-          <dl class="connection-list card-content">
-            <div><dt>Modem ID</dt><dd><code>{html.escape(settings.mmcli_modem_id)}</code></dd></div>
-            <div><dt>Backend</dt><dd><span class="badge sent">MMCLI</span></dd></div>
-          </dl>
-        </section>
-        """
-    script = html.escape(WB_SCRIPT_PATH.read_text(encoding="utf-8"))
-    return f"""
-    <section class="ha-card script-card compact-card">
-      <div class="section-head card-heading">
-        <div class="section-title"><span class="card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7l-4-4H8Zm5 1.5L16.5 8H13V4.5ZM9.5 12 7 14.5 9.5 17l1.1-1.1-1.4-1.4 1.4-1.4L9.5 12Zm5 0-1.1 1.1 1.4 1.4-1.4 1.4 1.1 1.1 2.5-2.5-2.5-2.5Z"/></svg></span><div><h2>{_t(lang, 'required_script')}</h2><p>{_t(lang, 'script_help')}</p></div></div>
-        <a class="secondary-button icon-download" href="send_sms.js" download title="{_t(lang, 'download')}">↓</a>
-      </div>
-      <details class="script-details"><summary>{_t(lang, 'view_script')}</summary><pre><code>{script}</code></pre></details>
-    </section>
-    """
-
-
-def _unifi_overview(settings: Settings, lang: str) -> str:
+def _unifi_overview(settings: Settings, lang: str, active_count: int = 0) -> str:
     api_key = settings.unifi_api_key.get_secret_value().strip() if settings.unifi_api_key else ""
     password = settings.unifi_password.get_secret_value().strip() if settings.unifi_password else ""
     credential = _t(lang, "not_configured")
@@ -771,22 +823,46 @@ def _unifi_overview(settings: Settings, lang: str) -> str:
         credential = _t(lang, "local_account")
     mode_key = "dry_run" if settings.unifi_dry_run else "live_mode"
     mode_class = "warning" if settings.unifi_dry_run else "sent"
+    auth_days = max(1, min(365, (settings.unifi_auth_minutes + 1439) // 1440))
+    sms_channel = "USB / MMCLI" if settings.sms_backend == "mmcli" else "WB / MQTT"
+    tls_key = "enabled" if settings.unifi_verify_tls else "disabled"
     return f"""
     <section class="ha-card hotspot-overview-card">
       <div class="card-heading hotspot-overview-heading">
         <span class="logo-preview"><img src="logo" alt="{_t(lang, 'logo')}"></span>
         <div><h2>{_t(lang, 'portal')}</h2><p>{html.escape(settings.hotspot_portal_title)}</p></div>
-        <span class="badge {mode_class} overview-mode">{_t(lang, mode_key)}</span>
         <a class="secondary-button portal-edit-button" href="preview?lang={html.escape(lang)}">{_t(lang, 'preview')}</a>
       </div>
-      <dl class="hotspot-overview-details card-content">
-        <div><dt>{_t(lang, 'background')}</dt><dd><strong class="color-chip" style="--portal-color:{html.escape(settings.hotspot_background_color, quote=True)}">{html.escape(settings.hotspot_background_color)}</strong></dd></div>
-        <div><dt>{_t(lang, 'logo_size')}</dt><dd><strong>{settings.hotspot_logo_size}px</strong></dd></div>
-        <div><dt>{_t(lang, 'base_url')}</dt><dd>{html.escape(settings.unifi_base_url or _t(lang, 'not_configured'))}</dd></div>
-        <div><dt>{_t(lang, 'site')}</dt><dd>{html.escape(settings.unifi_site)}</dd></div>
-        <div><dt>{_t(lang, 'auth_duration')}</dt><dd>{settings.unifi_auth_minutes} {_t(lang, 'minutes')}</dd></div>
-        <div><dt>{_t(lang, 'credentials')}</dt><dd>{credential}</dd></div>
-      </dl>
+      <div class="hotspot-overview-groups">
+        <section class="overview-group">
+          <div class="overview-group-heading"><span class="overview-group-icon"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0 0 18h1.5a1.5 1.5 0 0 0 0-3H12a1 1 0 0 1 0-2h2a7 7 0 0 0 0-14h-2Zm-4 6.5A1.5 1.5 0 1 1 8 6a1.5 1.5 0 0 1 0 3.5Zm4-2A1.5 1.5 0 1 1 12 4a1.5 1.5 0 0 1 0 3.5Zm4 2A1.5 1.5 0 1 1 16 6a1.5 1.5 0 0 1 0 3.5Z"/></svg></span><h3>{_t(lang, 'appearance')}</h3></div>
+          <dl class="overview-group-list">
+            <div><dt>{_t(lang, 'background')}</dt><dd><strong class="color-chip" style="--portal-color:{html.escape(settings.hotspot_background_color, quote=True)}">{html.escape(settings.hotspot_background_color)}</strong></dd></div>
+            <div><dt>{_t(lang, 'logo_size')}</dt><dd><strong>{settings.hotspot_logo_size}px</strong></dd></div>
+          </dl>
+        </section>
+        <section class="overview-group">
+          <div class="overview-group-heading"><span class="overview-group-icon"><svg viewBox="0 0 24 24"><path d="M3.9 12a5 5 0 0 1 5-5h3v2h-3a3 3 0 1 0 0 6h3v2h-3a5 5 0 0 1-5-5Zm5-1h6v2h-6v-2Zm6.2-4h-3V5h3a7 7 0 1 1 0 14h-3v-2h3a5 5 0 1 0 0-10Z"/></svg></span><h3>{_t(lang, 'connection')}</h3><span class="badge {mode_class}">{_t(lang, mode_key)}</span></div>
+          <dl class="overview-group-list">
+            <div><dt>{_t(lang, 'base_url')}</dt><dd>{html.escape(settings.unifi_base_url or _t(lang, 'not_configured'))}</dd></div>
+            <div><dt>{_t(lang, 'site')}</dt><dd>{html.escape(settings.unifi_site)}</dd></div>
+            <div><dt>{_t(lang, 'credentials')}</dt><dd>{credential}</dd></div>
+            <div><dt>{_t(lang, 'tls_check')}</dt><dd>{_t(lang, tls_key)}</dd></div>
+          </dl>
+        </section>
+        <section class="overview-group access-group">
+          <div class="overview-group-heading"><span class="overview-group-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.42 0-8 2.24-8 5v1h10.1a6 6 0 0 1-.1-1 6 6 0 0 1 2-4.47A10.8 10.8 0 0 0 12 14Zm7 1a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm.5 2v2.25l1.5.9-.75 1.23L18 20v-3h1.5Z"/></svg></span><h3>{_t(lang, 'guest_access')}</h3></div>
+          <dl class="overview-group-list">
+            <div><dt>{_t(lang, 'active_guests')}</dt><dd>{active_count}</dd></div>
+            <div><dt>{_t(lang, 'sms_channel')}</dt><dd>{sms_channel}</dd></div>
+          </dl>
+          <form class="duration-editor" method="post" action="settings/access-days">
+            <input type="hidden" name="lang" value="{html.escape(lang)}">
+            <label for="access-days">{_t(lang, 'auth_duration')}</label>
+            <div><input id="access-days" name="days" type="number" min="1" max="365" value="{auth_days}"><span>{_t(lang, 'days')}</span><button class="icon-save" type="submit" title="{_t(lang, 'save')}" aria-label="{_t(lang, 'save')}">✓</button></div>
+          </form>
+        </section>
+      </div>
     </section>
     """
 
@@ -1054,12 +1130,10 @@ def _dt(value) -> str:
 def _tabs(lang: str, active_tab: str) -> str:
     active = "class='active'" if active_tab == "active" else ""
     archive = "class='active'" if active_tab == "archive" else ""
-    preview = "class='active'" if active_tab == "preview" else ""
     return f"""
     <nav class="tabs">
       <a href="./?lang={html.escape(lang)}" {active}>{_t(lang, "active")}</a>
       <a href="archive?lang={html.escape(lang)}" {archive}>{_t(lang, "archive")}</a>
-      <a href="preview?lang={html.escape(lang)}" {preview}>{_t(lang, "preview")}</a>
     </nav>
     """
 
@@ -1185,15 +1259,41 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           .wb-grid {{ grid-template-columns: minmax(0, 1.35fr) minmax(330px, .65fr); }}
           .side-stack {{ min-width: 0; display: grid; align-content: start; gap: 12px; }}
           .side-stack .ha-card {{ margin: 0; }}
+          .single-connection {{ display: flex; align-items: stretch; }}
+          .single-connection .connection-card {{ flex: 1 1 auto; height: auto; }}
+          .connection-card-with-action {{ position: relative; }}
+          .connection-card-with-action > .card-heading {{ padding-right: 112px; }}
+          .connection-script > summary {{ position: absolute; top: 12px; right: 14px; list-style: none; }}
+          .connection-script > summary::-webkit-details-marker {{ display: none; }}
+          .script-button svg {{ width: 18px; height: 18px; fill: currentColor; }}
+          .connection-script[open] > summary {{ color: #fff; border-color: var(--primary); background: var(--primary); }}
+          .connection-script-content {{ border-top: 1px solid var(--divider); background: var(--surface-2); }}
+          .script-inline-heading {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }}
+          .script-inline-heading p {{ margin: 3px 0 0; color: var(--muted); font-size: 12px; }}
+          .connection-script-content pre {{ max-height: 360px; margin: 0; overflow: auto; padding: 16px 18px; border-top: 1px solid var(--divider); background: #111820; color: #e6edf3; font-size: 12px; line-height: 1.55; white-space: pre; }}
           .unifi-grid .ha-card {{ height: 100%; }}
           .portal-edit-button {{ margin-left: auto; }}
           .hotspot-overview-card {{ height: auto; }}
-          .hotspot-overview-heading {{ padding-bottom: 10px; }}
-          .hotspot-overview-heading .overview-mode {{ margin-left: auto; }}
-          .hotspot-overview-details {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; padding-top: 0; }}
-          .hotspot-overview-details > div {{ min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--divider); }}
-          .hotspot-overview-details dt {{ color: var(--muted); white-space: nowrap; }}
-          .hotspot-overview-details dd {{ min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }}
+          .hotspot-overview-heading {{ padding-bottom: 10px; border-bottom: 1px solid var(--divider); }}
+          .hotspot-overview-groups {{ display: grid; grid-template-columns: .85fr 1.2fr 1fr; }}
+          .overview-group {{ min-width: 0; padding: 12px 16px 14px; border-right: 1px solid var(--divider); }}
+          .overview-group:last-child {{ border-right: 0; }}
+          .overview-group-heading {{ min-height: 30px; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }}
+          .overview-group-heading h3 {{ margin: 0; font-size: 13px; font-weight: 600; }}
+          .overview-group-heading .badge {{ margin-left: auto; }}
+          .overview-group-icon {{ width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: rgba(3,169,244,.13); color: var(--primary); }}
+          .overview-group-icon svg {{ width: 17px; height: 17px; fill: currentColor; }}
+          .overview-group-list {{ margin: 0; }}
+          .overview-group-list > div {{ min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--divider); }}
+          .overview-group-list > div:last-child {{ border-bottom: 0; }}
+          .overview-group-list dt {{ color: var(--muted); white-space: nowrap; }}
+          .overview-group-list dd {{ min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-weight: 500; text-align: right; text-overflow: ellipsis; white-space: nowrap; }}
+          .duration-editor {{ margin-top: 7px; padding-top: 9px; border-top: 1px solid var(--divider); }}
+          .duration-editor > label {{ display: block; margin-bottom: 7px; color: var(--muted); }}
+          .duration-editor > div {{ display: flex; align-items: center; gap: 7px; }}
+          .duration-editor input {{ width: 70px; min-height: 32px; padding: 4px 8px; text-align: right; }}
+          .duration-editor span {{ color: var(--muted); }}
+          .duration-editor .icon-save {{ width: 32px; min-height: 32px; margin-left: auto; padding: 0; color: #fff; background: var(--primary); }}
           .color-chip::before {{ content: ""; width: 18px; height: 18px; display: inline-block; margin-right: 7px; vertical-align: middle; border: 1px solid var(--divider); border-radius: 5px; background: var(--portal-color); }}
           .preview-workspace {{ display: grid; grid-template-columns: minmax(260px, 310px) minmax(0, 1fr); gap: 12px; align-items: stretch; }}
           .preview-workspace .ha-card {{ margin-bottom: 0; }}
@@ -1319,8 +1419,8 @@ def _layout(title: str, content: str, active_tab: str, lang: str, sms_backend: s
           [data-theme="dark"] .success {{ background: #17351f; color: #81c995; }} [data-theme="dark"] .error {{ background: #401c1b; color: #f28b82; }}
           [data-theme="dark"] input, [data-theme="dark"] textarea {{ border-color: #59616a; }}
           [data-theme="dark"] .sun-icon {{ display: none; }} [data-theme="dark"] .moon-icon {{ display: block; }}
-          @media (max-width: 900px) {{ .dashboard-grid, .preview-workspace {{ grid-template-columns: 1fr; }} .hotspot-overview-details {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
-          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .hotspot-overview-details {{ grid-template-columns: 1fr; }} .hotspot-overview-heading {{ flex-wrap: wrap; }} .hotspot-overview-heading .overview-mode {{ margin-left: 0; }} .portal-edit-button {{ margin-left: auto; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
+          @media (max-width: 900px) {{ .dashboard-grid, .preview-workspace {{ grid-template-columns: 1fr; }} .hotspot-overview-groups {{ grid-template-columns: 1fr; }} .overview-group {{ border-right: 0; border-bottom: 1px solid var(--divider); }} .overview-group:last-child {{ border-bottom: 0; }} main {{ padding: 12px 10px 28px; }} header {{ padding: 7px 10px; }} .brand p {{ display: none; }} .table-heading {{ align-items: flex-start; }} .table-tools {{ flex-wrap: wrap; }} }}
+          @media (max-width: 640px) {{ .product-nav {{ grid-template-columns: repeat(3, 1fr); }} .connection-list div {{ grid-template-columns: 1fr; gap: 3px; }} .hotspot-overview-heading {{ flex-wrap: wrap; }} .portal-edit-button {{ margin-left: auto; }} .card-heading {{ padding: 12px 13px 9px; }} .card-content {{ padding: 2px 13px 12px; }} .table-toolbar {{ flex-wrap: wrap; padding: 9px 13px; }} .search-field {{ flex-basis: 100%; max-width: none; }} .result-count {{ margin-left: 0; }} .refresh-button {{ margin-left: auto; }} .section-title .card-icon {{ display: none; }} .table-heading {{ gap: 10px; }} .table-tools {{ width: 100%; justify-content: space-between; }} .language {{ display: none; }} .active-table {{ min-width: 0; table-layout: auto; }} .active-table colgroup, .active-table thead {{ display: none; }} .active-table tbody {{ display: grid; gap: 10px; padding: 10px; background: var(--bg); }} .active-table tr {{ display: block; overflow: visible; border: 1px solid var(--divider); border-radius: 10px; background: var(--surface); }} .active-table td {{ display: grid; grid-template-columns: 105px 1fr; gap: 10px; align-items: start; width: 100%; padding: 9px 10px; white-space: normal !important; }} .active-table td::before {{ content: attr(data-label); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; }} .product-nav a {{ min-height: 44px; font-size: 13px; }} .preview-stage {{ min-height: 590px; padding: 10px; }} .preview-device {{ height: 560px; border-width: 5px; border-radius: 16px; }} .preview-tools {{ width: 100%; margin-left: 0; }} }}
         </style>
       </head>
       <body>
