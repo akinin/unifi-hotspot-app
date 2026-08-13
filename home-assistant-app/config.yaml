@@ -1,5 +1,5 @@
 name: Wiren Board SMS Gateway
-version: "0.2.0"
+version: "0.2.1"
 slug: wirenboard_sms
 description: SMS API and optional UniFi guest portal through Wiren Board
 url: https://github.com/akinin/wirenboard-sms/tree/main/home-assistant-app
