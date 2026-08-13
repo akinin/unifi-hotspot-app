@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Replace the application icon and logo with the official Wiren Board artwork.
+
 ## 0.2.0
 
 - Initial Home Assistant App packaging.
