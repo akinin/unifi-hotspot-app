@@ -256,6 +256,36 @@ class HotspotStore:
                 values,
             )
 
+    def remember_client_names(self, clients: list[dict[str, object]]) -> None:
+        """Fill missing portal/archive names from UniFi without overriding manual names."""
+        values = []
+        for client in clients:
+            mac = str(client.get("mac") or "").lower()
+            name = str(client.get("name") or client.get("hostname") or "").strip()[:120]
+            if mac and name:
+                values.append((name, mac))
+        if not values:
+            return
+        with self._connect() as conn:
+            conn.executemany(
+                """
+                UPDATE hotspot_sessions
+                SET display_name = ?
+                WHERE client_mac = ?
+                  AND TRIM(COALESCE(display_name, '')) = ''
+                """,
+                values,
+            )
+            conn.executemany(
+                """
+                UPDATE hotspot_authorizations
+                SET display_name = ?
+                WHERE client_mac = ?
+                  AND TRIM(COALESCE(display_name, '')) = ''
+                """,
+                values,
+            )
+
     def cached_client_ips(self) -> dict[str, str]:
         with self._connect() as conn:
             rows = conn.execute(

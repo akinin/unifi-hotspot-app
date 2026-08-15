@@ -3,7 +3,9 @@ import time
 
 import pytest
 from fastapi import HTTPException
+from starlette.requests import Request
 
+import hotspot.admin as hotspot_admin
 from api.config import Settings
 from api.deps import require_api_token
 from api.sms_monitor import WBSmsMonitor
@@ -21,6 +23,7 @@ from hotspot.admin import (
     _tabs,
     _unifi_overview,
     _wb_overview,
+    admin_archive,
     update_access_days,
     update_settings,
 )
@@ -318,6 +321,42 @@ def test_last_known_client_ip_is_retained(tmp_path) -> None:
     assert store.cached_client_ips() == {
         "aa:bb:cc:dd:ee:ff": "10.10.10.25"
     }
+
+
+def test_archive_keeps_hotspot_overview_and_remembers_unifi_name(monkeypatch, tmp_path) -> None:
+    async def unifi_clients(_settings):
+        return {
+            "aa:bb:cc:dd:ee:ff": {
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "hostname": "iPhone",
+                "authorized": True,
+            }
+        }
+
+    monkeypatch.setattr(hotspot_admin, "_safe_unifi_clients", unifi_clients)
+    store = Store(str(tmp_path / "hotspot.sqlite3"))
+    hotspot_store = HotspotStore(store)
+    hotspot_store.save_session("aa:bb:cc:dd:ee:ff", "+79990000000", None, None)
+    hotspot_store.mark_authorized("aa:bb:cc:dd:ee:ff", 1440)
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/admin/archive",
+            "headers": [],
+            "query_string": b"lang=ru",
+        }
+    )
+
+    response = asyncio.run(
+        admin_archive(request, settings=Settings(app_role="admin"), store=store)
+    )
+    page = response.body.decode()
+
+    assert 'class="ha-card hotspot-overview-card"' in page
+    assert "iPhone" in page
+    assert "<strong>aa:bb:cc:dd:ee:ff</strong>" not in page
+    assert hotspot_store.list_archive()[0]["display_name"] == "iPhone"
 
 
 def test_sms_store_records_delivery_history(tmp_path) -> None:

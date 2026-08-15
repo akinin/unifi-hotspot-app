@@ -291,9 +291,10 @@ async def admin_home(
 ) -> HTMLResponse:
     lang = _lang(request)
     hotspot_store = HotspotStore(store)
-    sessions = hotspot_store.list_active_sessions()
     unifi_clients = await _safe_unifi_clients(settings)
     _apply_cached_client_ips(hotspot_store, unifi_clients)
+    hotspot_store.remember_client_names(list(unifi_clients.values()))
+    sessions = hotspot_store.list_active_sessions()
     active_count = len(_merged_active_records(sessions, unifi_clients))
     message = request.query_params.get("message", "")
     error = request.query_params.get("error", "")
@@ -445,19 +446,26 @@ def _sms_workspace(
 
 
 @router.get("/archive", response_class=HTMLResponse)
-def admin_archive(
+async def admin_archive(
     request: Request,
     settings: Settings = Depends(require_admin),
     store: Store = Depends(get_store),
 ) -> HTMLResponse:
     lang = _lang(request)
-    rows = HotspotStore(store).list_archive()
+    hotspot_store = HotspotStore(store)
+    unifi_clients = await _safe_unifi_clients(settings)
+    _apply_cached_client_ips(hotspot_store, unifi_clients)
+    hotspot_store.remember_client_names(list(unifi_clients.values()))
+    sessions = hotspot_store.list_active_sessions()
+    rows = hotspot_store.list_archive()
+    active_count = len(_merged_active_records(sessions, unifi_clients))
     message = request.query_params.get("message", "")
     error = request.query_params.get("error", "")
     return HTMLResponse(
         _layout(
             "Archive",
             _messages(message, error)
+            + _unifi_overview(settings, lang, active_count)
             + _archive_table(rows, lang),
             active_tab="hotspot",
             lang=lang,

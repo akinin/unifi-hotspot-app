@@ -1,5 +1,5 @@
 name: UniFi Hotspot
-version: "0.6.6"
+version: "0.6.7"
 slug: wirenboard_sms
 description: Гостевой портал UniFi с авторизацией по SMS через Wiren Board или USB-модем
 url: https://github.com/akinin/unifi-hotspot-app/tree/main/home-assistant-app
